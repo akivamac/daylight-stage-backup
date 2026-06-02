@@ -2,3 +2,4 @@ alias claude='node /data/data/com.termux/files/usr/lib/node_modules/@anthropic-a
 export TMPDIR=$PREFIX/tmp
 export PATH="$HOME/bin:$PATH"
 (python ~/stage-server.py &) >/dev/null 2>&1
+alias pushstage='~/backup.sh'
