@@ -1,0 +1,3639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stage — v2 (projects)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.4.3/blockly.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --panel: #ffffff;
+    --panel-2: #efece2;
+    --line: #d8d4c8;
+    --text: #1a1a1f;
+    --muted: #6b6b75;
+    --pink: #e91e63;
+    --cyan: #00acc1;
+    --lime: #8bc34a;
+    --amber: #f57c00;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow: hidden; -webkit-text-size-adjust: 100%; }
+  #app { display: flex; flex-direction: row-reverse; height: 100dvh; }
+  #blocklyArea { flex: 1.2; min-width: 280px; background: var(--panel); position: relative; }
+  #blocklyDiv { position: absolute; inset: 0; }
+  #rightPanel { flex: 1; min-width: 320px; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); }
+  header.bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 8px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  header.bar .title {
+    font-weight: 800; letter-spacing: 0.5px; font-size: 14px;
+    color: var(--text); margin-right: auto; text-transform: uppercase;
+  }
+  header.bar .title span { color: var(--pink); }
+  button.btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 4px 8px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+    min-height: 40px; min-width: 40px; transition: transform .05s ease, background .15s, border-color .15s;
+  }
+  button.btn:active { transform: translateY(1px); }
+  button.btn.run { background: var(--lime); color: #0a0a0a; border-color: var(--lime); }
+  button.btn.run:hover { filter: brightness(1.05); }
+  button.btn.stop { background: transparent; color: var(--pink); border-color: var(--pink); }
+  button.btn.ghost { background: transparent; }
+  button.btn.ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+  .size-group { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .size-group input {
+    width: 64px; padding: 8px 6px; min-height: 40px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-align: center;
+  }
+  #stageWrap {
+    flex: 1; overflow: hidden; position: relative;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(233,30,99,0.06), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(0,172,193,0.06), transparent 40%),
+      var(--bg);
+  }
+  #stage {
+    position: absolute; inset: 0; background: #ffffff;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  /* Layout modes */
+  #app.mode-split #blocklyArea { flex: 1.2; }
+  #app.mode-split #rightPanel { flex: 1; }
+  #app.mode-max #blocklyArea { flex: 0 0 0; min-width: 0; display: none; }
+  #app.mode-max #rightPanel { flex: 1; }
+  #app.mode-hidden #blocklyArea { flex: 1; }
+  #app.mode-hidden #rightPanel { flex: 0 0 56px; min-width: 56px; }
+  #app.mode-hidden #stageWrap, #app.mode-hidden #log { position: absolute !important; bottom: 0; left: 0; right: 0; z-index: 200; opacity: 0.92; display: none; }
+  #app.mode-hidden header.bar .title,
+  #app.mode-hidden header.bar .run,
+  #app.mode-hidden header.bar .stop { display: none; }
+  #app.mode-hidden header.bar { padding: 10px 6px; flex-direction: column; }
+  #stage canvas { position: absolute; top: 0; left: 0; display: block; }
+  #layerSPRITES { pointer-events: none; }
+
+  /* On-screen D-pad — fires the same key events as a physical keyboard */
+  #dpad {
+    position: absolute;
+    bottom: 90px; left: 16px;
+    display: grid;
+    grid-template-columns: 50px 50px 50px;
+    grid-template-rows: 50px 50px 50px;
+    gap: 6px;
+    z-index: 100;
+    opacity: 0.95;
+    touch-action: none;
+  }
+  #dpad.hidden .dpad-btn { display: none; }
+  .dpad-btn {
+    background: rgba(0,0,0,0.55); color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 20px; font-weight: 700;
+    cursor: pointer; user-select: none; touch-action: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dpad-btn:active { background: var(--pink); }
+  .dpad-btn[data-key="up"]    { grid-column: 2; grid-row: 1; }
+  .dpad-btn[data-key="left"]  { grid-column: 1; grid-row: 2; }
+  .dpad-btn[data-key="down"]  { grid-column: 2; grid-row: 2; }
+  .dpad-btn[data-key="right"] { grid-column: 3; grid-row: 2; }
+  .dpad-space {
+    grid-column: 1 / span 3; grid-row: 3;
+    font-size: 13px !important;
+  }
+  .dpad-toggle {
+    position: absolute;
+    bottom: 0; right: -56px;
+    width: 44px; height: 44px;
+    background: rgba(0,0,0,0.55); color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 20px; cursor: pointer;
+  }
+  /* Bigger touch targets for the toolbox */
+  .blocklyToolboxCategory { padding: 4px 0 !important; }
+  .blocklyTreeRow {
+    min-height: 48px !important;
+    padding: 0 18px 0 14px !important;
+    margin: 6px 8px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  .blocklyTreeLabel {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    padding-left: 8px !important;
+  }
+  .blocklyTreeIcon { width: 22px !important; height: 22px !important; }
+
+  /* Toolbox must scroll when there are many categories */
+  .blocklyToolboxDiv {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    max-height: 100% !important;
+  }
+
+  /* Trashcan: keep default size (CSS scale was breaking it on some browsers) */
+  .blocklyTrash { opacity: 0.95; }
+  .blocklyTrash:hover { opacity: 1; }
+  #penCursor {
+    position: absolute;
+    left: 0; top: 0;
+    width: 22px; height: 22px;
+    margin-left: -11px; margin-top: -11px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; font-weight: 700;
+    pointer-events: none; user-select: none;
+    z-index: 10;
+    transition: transform 0.12s ease-out, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  #penCursor[data-state="up"] {
+    background: rgba(255, 255, 255, 0.92);
+    color: #888;
+    border: 2px dashed #888;
+    box-shadow: 0 9px 14px -3px rgba(0, 0, 0, 0.28);
+  }
+  #penCursor[data-state="down"] {
+    background: var(--pink);
+    color: #fff;
+    border: 2px solid #b71653;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+  #log { position: absolute !important; bottom: 0; left: 0; right: 0; z-index: 200; opacity: 0.92;
+    padding: 8px 14px; background: var(--panel-2); color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    min-height: 32px; border-top: 1px solid var(--line);
+    white-space: pre-wrap; max-height: 100px; overflow-y: auto;
+  }
+  #log.ok { color: #2e7d32; }
+  #log.err { color: var(--pink); }
+  /* Blockly tweaks for tablet touch */
+  .blocklyToolboxDiv { background: var(--panel-2) !important; border-right: 1px solid var(--line) !important; }
+  .blocklyTreeRow { padding: 6px 8px !important; }
+</style>
+</head>
+<body>
+<div id="app" class="mode-split">
+  <div id="blocklyArea">
+    <div id="blocklyDiv"></div>
+  </div>
+  <div id="rightPanel">
+    <header class="bar">
+      <div class="title">stage<span>.</span></div>
+      <button id="runBtn" class="btn run">▶ Run</button>
+      <button id="stopBtn" class="btn stop">■ Stop</button>
+      <button onclick="document.getElementById(String.fromCharCode(108,111,103)).textContent=Blockly.JavaScript.workspaceToCode(workspace)">📜</button><button id="trashBtn" class="btn ghost" title="Open trash (deleted blocks)">🗑</button>
+      <button id="saveBtn" class="btn ghost" title="Download your project as a file">💾 Save</button>
+      <button id="loadBtn" class="btn ghost" title="Load a project file">📂 Load</button>
+      <input type="file" id="loadInput" accept=".json,application/json" style="display:none">
+      <span id="backupStatus" title="Termux backup server status" style="font-size:12px;color:var(--muted);margin:0 8px;">⚫ backup off</span>
+      <select id="projectPicker" title="Switch project" style="padding:8px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:600;min-height:40px;">
+        <option value="">— pick a project —</option>
+      </select>
+      <button id="projectNewBtn" class="btn ghost" title="Create a new project">＋ New</button>
+      <button id="projectDelBtn" class="btn ghost" title="Delete the current project (moves to trash folder)">🗑 Del</button>
+      <button id="modeBtn" class="btn ghost" title="Cycle layout: split / stage-max / stage-hidden">▦ split</button>
+      <button id="centerBtn" class="btn ghost" title="Pan back to your content">⊕ Center</button>
+      <button id="unstickBtn" class="btn ghost" title="Free a block stuck to your cursor (or press Esc)">🪄 Unstick</button>
+    </header>
+    <div id="stageWrap">
+      <div id="stage">
+        <canvas id="layerBG"></canvas>
+        <canvas id="layerMID"></canvas>
+        <canvas id="layerFG"></canvas>
+        <canvas id="layerSPRITES"></canvas>
+        <div id="penCursor" data-state="up">p</div>
+        <div id="tapeMeasure" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:8px 14px;border-radius:10px;font-family:ui-monospace,monospace;font-size:14px;font-weight:600;z-index:120;pointer-events:none;display:none;">tape</div>
+        <div id="tapeMarker" style="position:absolute;width:20px;height:20px;border:2px solid #ff2d75;border-radius:50%;background:rgba(255,45,117,0.25);pointer-events:none;z-index:115;display:none;transform:translate(-50%,-50%);"></div>
+
+      <div id="keyDebug" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;padding:6px 10px;border-radius:8px;font-family:monospace;font-size:12px;z-index:99;pointer-events:none;">keys: (none)</div>
+      <div id="watchPanel" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.7);color:#fff;padding:6px;border-radius:8px;font-family:monospace;font-size:11px;z-index:99;display:flex;flex-direction:column;gap:4px;min-width:170px;">
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select class="watchSel" data-slot="0" style="flex:1;font-size:11px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;"></select>
+          <span class="watchVal" data-slot="0" style="min-width:40px;text-align:right;font-weight:bold;">—</span>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select class="watchSel" data-slot="1" style="flex:1;font-size:11px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;"></select>
+          <span class="watchVal" data-slot="1" style="min-width:40px;text-align:right;font-weight:bold;">—</span>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select class="watchSel" data-slot="2" style="flex:1;font-size:11px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;"></select>
+          <span class="watchVal" data-slot="2" style="min-width:40px;text-align:right;font-weight:bold;">—</span>
+        </div>
+      </div>
+      <button id="watchToggle" title="Show/hide watch panel" style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 8px;font-size:14px;z-index:200;cursor:pointer;pointer-events:auto;">👁</button>
+        <div id="dpad">
+          <button class="dpad-btn" data-key="up">↑</button>
+          <button class="dpad-btn" data-key="left">←</button>
+          <button class="dpad-btn" data-key="down">↓</button>
+          <button class="dpad-btn" data-key="right">→</button>
+          <button class="dpad-btn dpad-space" data-key="space">space</button>
+          <button id="dpadToggle" class="dpad-toggle" title="Show/hide on-screen keys">⌨</button>
+        </div>
+      </div>
+    </div>
+    <div id="log">ready.</div>
+  </div>
+</div>
+
+<xml id="toolbox" style="display:none">
+  <category name="Events" colour="#FFAB19">
+    <block type="event_run"></block>
+  </category>
+
+  <category name="Keyboard" colour="#FF6E40">
+    <block type="event_key_pressed"></block>
+    <block type="key_pressed"></block>
+  </category>
+  <category name="Stage" colour="#9966FF">
+    <block type="stage_clear"></block>
+    <block type="stage_clear_layer"></block>
+    <block type="stage_background">
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#87CEEB</field></shadow></value>
+    </block>
+    <block type="draw_layer"></block>
+    <block type="stage_set_size">
+      <value name="W"><shadow type="math_number"><field name="NUM">480</field></shadow></value>
+      <value name="H"><shadow type="math_number"><field name="NUM">360</field></shadow></value>
+    </block>
+    <block type="stage_opacity">
+      <value name="A"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+    </block>
+      <block type="set_ground">
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="clear_ground"></block>
+    <block type="terrain_change">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="W"><shadow type="math_number"><field name="NUM">20</field></shadow></value>
+      <value name="D"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="terrain_height">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="terrain_reset"></block>
+  </category>
+
+  <category name="Sprites" colour="#673AB7">
+    <block type="sprite_create">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#e91e63</field></shadow></value>
+    </block>
+    <block type="sprite_move_to">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+    </block>
+    <block type="sprite_change_x">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="N"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
+    </block>
+    <block type="sprite_change_y">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="N"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
+    </block>
+    <block type="sprite_set_size">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">40</field></shadow></value>
+    </block>
+    <block type="sprite_set_color">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#4caf50</field></shadow></value>
+    </block>
+    <block type="sprite_rotate">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="DEG"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+    </block>
+    <block type="sprite_set_emoji">
+      <value name="NAME"><shadow type="text"><field name="TEXT">digger</field></shadow></value>
+      <value name="EMOJI"><shadow type="text"><field name="TEXT">🚜</field></shadow></value>
+    </block>
+    <block type="sprite_add_part">
+      <value name="NAME"><shadow type="text"><field name="TEXT">excavator</field></shadow></value>
+      <value name="OX"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="OY"><shadow type="math_number"><field name="NUM">-30</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#ffc107</field></shadow></value>
+      <value name="ROT"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="sprite_add_rect">
+      <value name="NAME"><shadow type="text"><field name="TEXT">excavator</field></shadow></value>
+      <value name="OX"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="OY"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="W"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
+      <value name="H"><shadow type="math_number"><field name="NUM">20</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#ffc107</field></shadow></value>
+      <value name="ROT"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="sprite_clear_parts">
+      <value name="NAME"><shadow type="text"><field name="TEXT">excavator</field></shadow></value>
+    </block>
+    <block type="sprite_set_effect">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="AMOUNT"><shadow type="math_number"><field name="NUM">8</field></shadow></value>
+    </block>
+    <block type="sprite_clear_effects">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+    <block type="sprite_set_trail_particle">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">12</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#dddddd</field></shadow></value>
+      <value name="LIFE"><shadow type="math_number"><field name="NUM">20</field></shadow></value>
+    </block>
+    <block type="sprite_set_footprint_trail">
+      <value name="NAME"><shadow type="text"><field name="TEXT">tractor</field></shadow></value>
+      <value name="LEFT"><shadow type="text"><field name="TEXT">left track</field></shadow></value>
+      <value name="RIGHT"><shadow type="text"><field name="TEXT">right track</field></shadow></value>
+      <value name="SPACING"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+    </block>
+    <block type="sprite_stop_footprint_trail">
+      <value name="NAME"><shadow type="text"><field name="TEXT">tractor</field></shadow></value>
+    </block>
+    <block type="sprite_set_visible">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+    <block type="sprite_delete">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+    <block type="sprite_delete_all"></block>
+    <block type="sprite_x">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+    <block type="sprite_y">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+      <block type="sprite_name"></block>
+    <block type="sprite_set_solid">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="sprite_set_frozen">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="sprite_set_gravity">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="sprite_touching_solid">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="sprite_on_ground">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+  </category>
+
+  <category name="Costumes" colour="#03A9F4">
+    <block type="costume_define">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my costume</field></shadow></value>
+    </block>
+    <block type="sprite_set_costume">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+      <value name="COSTUME"><shadow type="text"><field name="TEXT">my costume</field></shadow></value>
+    </block>
+    <block type="sprite_clear_costume">
+      <value name="NAME"><shadow type="text"><field name="TEXT">ball</field></shadow></value>
+    </block>
+    <block type="costume_delete">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my costume</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Draw" colour="#4C97FF">
+    <block type="draw_circle">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="R"><shadow type="math_number"><field name="NUM">40</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#ff3366</field></shadow></value>
+    </block>
+    <block type="draw_rect">
+      <value name="X"><shadow type="math_number"><field name="NUM">-60</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">-40</field></shadow></value>
+      <value name="W"><shadow type="math_number"><field name="NUM">120</field></shadow></value>
+      <value name="H"><shadow type="math_number"><field name="NUM">80</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#33ff66</field></shadow></value>
+    </block>
+    <block type="draw_ellipse">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="RX"><shadow type="math_number"><field name="NUM">80</field></shadow></value>
+      <value name="RY"><shadow type="math_number"><field name="NUM">40</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#9c27b0</field></shadow></value>
+    </block>
+    <block type="draw_line">
+      <value name="X1"><shadow type="math_number"><field name="NUM">-100</field></shadow></value>
+      <value name="Y1"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="X2"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="Y2"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="THICK"><shadow type="math_number"><field name="NUM">4</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#000000</field></shadow></value>
+    </block>
+    <block type="draw_triangle">
+      <value name="X1"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y1"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
+      <value name="X2"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
+      <value name="Y2"><shadow type="math_number"><field name="NUM">-40</field></shadow></value>
+      <value name="X3"><shadow type="math_number"><field name="NUM">-60</field></shadow></value>
+      <value name="Y3"><shadow type="math_number"><field name="NUM">-40</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#ff9800</field></shadow></value>
+    </block>
+    <block type="draw_text">
+      <value name="MSG"><shadow type="text"><field name="TEXT">hello!</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">-40</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">32</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#222222</field></shadow></value>
+    </block>
+    <block type="draw_puff">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#cccccc</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Pen" colour="#0FBD8C">
+    <block type="pen_down"></block>
+    <block type="pen_up"></block>
+    <block type="pen_goto">
+      <value name="X"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+    </block>
+    <block type="pen_color">
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#000000</field></shadow></value>
+    </block>
+    <block type="pen_size">
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">4</field></shadow></value>
+    </block>
+    <block type="pen_set_direction">
+      <value name="DEG"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="pen_turn">
+      <value name="DEG"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+    </block>
+    <block type="pen_move">
+      <value name="STEPS"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+    </block>
+    <block type="pen_x"></block>
+    <block type="pen_y"></block>
+  </category>
+
+  <category name="Camera" colour="#E91E63">
+    <block type="camera_zoom">
+      <value name="Z"><shadow type="math_number"><field name="NUM">1.5</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Control" colour="#FFAB19">
+    <block type="control_wait">
+      <value name="SECS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+    </block>
+    <block type="controls_repeat_ext">
+      <value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
+    </block>
+    <block type="control_forever"></block>
+    <block type="controls_whileUntil"></block>
+    <block type="controls_if"></block>
+    <block type="control_stop_all"></block>
+  </category>
+
+  <category name="Variables" colour="#FF8C1A" custom="VARIABLE"></category>
+  <category name="Flags" colour="#FF8C1A">
+    <block type="var_set_bool"></block>
+    <block type="var_get_bool"></block>
+  </category>
+  <category name="My Blocks" colour="#FF66AA" custom="PROCEDURE"></category>
+
+  <category name="Logic" colour="#5B80A5">
+    <block type="logic_compare"></block>
+    <block type="logic_operation"></block>
+    <block type="logic_negate"></block>
+    <block type="logic_boolean"></block>
+  </category>
+
+  <category name="Math" colour="#40BF4A">
+    <block type="math_number"></block>
+    <block type="math_arithmetic"></block>
+    <block type="math_single"></block>
+    <block type="math_trig"></block>
+    <block type="math_constant"></block>
+    <block type="math_round"></block>
+    <block type="math_modulo"></block>
+    <block type="math_random_int">
+      <value name="FROM"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="TO"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+    </block>
+    <block type="math_random_float"></block>
+  </category>
+
+  <category name="Color" colour="#FF6680">
+    <block type="colour_picker"></block>
+    <block type="my_colour_random"></block>
+    <block type="my_colour_rgb">
+      <value name="RED"><shadow type="math_number"><field name="NUM">255</field></shadow></value>
+      <value name="GREEN"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="BLUE"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+    </block>
+    <block type="my_colour_hsl">
+      <value name="H"><shadow type="math_number"><field name="NUM">200</field></shadow></value>
+      <value name="S"><shadow type="math_number"><field name="NUM">80</field></shadow></value>
+      <value name="L"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Lists" colour="#FF8C1A">
+    <block type="list_create">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_add">
+      <value name="ITEM"><shadow type="text"><field name="TEXT">thing</field></shadow></value>
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_item">
+      <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_length">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_set">
+      <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="ITEM"><shadow type="text"><field name="TEXT">new</field></shadow></value>
+    </block>
+    <block type="list_delete">
+      <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_clear">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+    </block>
+    <block type="list_any_sprite_near">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="DIST"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="list_closest_sprite">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Text" colour="#5BA58C">
+    <block type="text"></block>
+    <block type="text_join"></block>
+    <block type="text_length">
+      <value name="VALUE"><shadow type="text"><field name="TEXT">hello</field></shadow></value>
+    </block>
+  </category>
+</xml>
+
+<script>
+// ---------- Custom blocks ----------
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'list_create',
+    message0: 'create list %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A',
+    tooltip: 'Make an empty list (or reset an existing one to empty).'
+  },
+  {
+    type: 'list_add',
+    message0: 'add %1 to list %2',
+    args0: [
+      { type: 'input_value', name: 'ITEM' },
+      { type: 'input_value', name: 'NAME' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'list_item',
+    message0: 'item %1 of list %2',
+    args0: [
+      { type: 'input_value', name: 'INDEX', check: 'Number' },
+      { type: 'input_value', name: 'NAME' }
+    ],
+    output: null,
+    colour: '#FF8C1A', inputsInline: true,
+    tooltip: 'First item is 1. Returns empty if N is out of range.'
+  },
+  {
+    type: 'list_length',
+    message0: 'length of list %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: 'Number',
+    colour: '#FF8C1A'
+  },
+  {
+    type: 'list_set',
+    message0: 'set item %1 of list %2 to %3',
+    args0: [
+      { type: 'input_value', name: 'INDEX', check: 'Number' },
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'ITEM' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'list_delete',
+    message0: 'delete item %1 of list %2',
+    args0: [
+      { type: 'input_value', name: 'INDEX', check: 'Number' },
+      { type: 'input_value', name: 'NAME' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'list_clear',
+    message0: 'clear list %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A'
+  },
+
+  {
+    type: 'event_run',
+    message0: '▶ when Run pressed',
+    nextStatement: null,
+    colour: '#FFAB19',
+    tooltip: 'Everything below runs when you press Run'
+  },
+
+  // ---- Stage ----
+  {
+    type: 'stage_clear',
+    message0: 'clear stage',
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'stage_clear_layer',
+    message0: 'clear layer %1',
+    args0: [{ type: 'field_dropdown', name: 'LAYER',
+      options: [['background','bg'],['midground','mid'],['foreground','fg']] }],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'stage_background',
+    message0: 'set background color %1',
+    args0: [{ type: 'input_value', name: 'COLOR', check: 'Colour' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'draw_layer',
+    message0: 'draw on layer %1',
+    args0: [{ type: 'field_dropdown', name: 'LAYER',
+      options: [['background','bg'],['midground','mid'],['foreground','fg']] }],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'stage_set_size',
+    message0: 'set stage size  w %1  h %2',
+    args0: [
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF', inputsInline: true
+  },
+  {
+    type: 'stage_opacity',
+    message0: 'set drawing opacity %1',
+    args0: [{ type: 'input_value', name: 'A', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF',
+    tooltip: '0 = invisible, 1 = solid'
+  },
+
+  // ---- Draw ----
+  {
+    type: 'draw_circle',
+    message0: 'draw circle  x %1  y %2  r %3  color %4',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'R', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_rect',
+    message0: 'draw rect  x %1  y %2  w %3  h %4  color %5',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_ellipse',
+    message0: 'draw ellipse  x %1  y %2  rx %3  ry %4  color %5',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'RX', check: 'Number' },
+      { type: 'input_value', name: 'RY', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_line',
+    message0: 'draw line  from %1, %2  to %3, %4  thickness %5  color %6',
+    args0: [
+      { type: 'input_value', name: 'X1', check: 'Number' },
+      { type: 'input_value', name: 'Y1', check: 'Number' },
+      { type: 'input_value', name: 'X2', check: 'Number' },
+      { type: 'input_value', name: 'Y2', check: 'Number' },
+      { type: 'input_value', name: 'THICK', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_triangle',
+    message0: 'draw triangle  %1, %2   %3, %4   %5, %6  color %7',
+    args0: [
+      { type: 'input_value', name: 'X1', check: 'Number' },
+      { type: 'input_value', name: 'Y1', check: 'Number' },
+      { type: 'input_value', name: 'X2', check: 'Number' },
+      { type: 'input_value', name: 'Y2', check: 'Number' },
+      { type: 'input_value', name: 'X3', check: 'Number' },
+      { type: 'input_value', name: 'Y3', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_text',
+    message0: 'draw text %1  at x %2  y %3  size %4  color %5',
+    args0: [
+      { type: 'input_value', name: 'MSG' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true
+  },
+  {
+    type: 'draw_puff',
+    message0: 'draw puff  x %1  y %2  size %3  color %4',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#4C97FF', inputsInline: true,
+    tooltip: 'A fluffy puff stamp — great for smoke, clouds, dust'
+  },
+
+  // ---- Pen ----
+  {
+    type: 'pen_down',
+    message0: 'pen down',
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C'
+  },
+  {
+    type: 'pen_up',
+    message0: 'pen up',
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C'
+  },
+  {
+    type: 'pen_goto',
+    message0: 'pen move to  x %1  y %2',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C', inputsInline: true
+  },
+  {
+    type: 'pen_color',
+    message0: 'set pen color %1',
+    args0: [{ type: 'input_value', name: 'COLOR', check: 'Colour' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C'
+  },
+  {
+    type: 'pen_size',
+    message0: 'set pen size %1',
+    args0: [{ type: 'input_value', name: 'SIZE', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C'
+  },
+  {
+    type: 'pen_set_direction',
+    message0: 'point pen in direction %1°',
+    args0: [{ type: 'input_value', name: 'DEG', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C',
+    tooltip: '0° = right, 90° = up, 180° = left, 270° = down'
+  },
+  {
+    type: 'pen_turn',
+    message0: 'turn pen %1 by %2°',
+    args0: [
+      { type: 'field_dropdown', name: 'DIR', options: [['↺ left','left'],['↻ right','right']] },
+      { type: 'input_value', name: 'DEG', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C', inputsInline: true
+  },
+  {
+    type: 'pen_move',
+    message0: 'move pen %1 steps %2',
+    args0: [
+      { type: 'input_value', name: 'STEPS', check: 'Number' },
+      { type: 'field_dropdown', name: 'DIR', options: [['forward','forward'],['back','back']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#0FBD8C', inputsInline: true
+  },
+  {
+    type: 'pen_x',
+    message0: 'pen x',
+    output: 'Number',
+    colour: '#0FBD8C'
+  },
+  {
+    type: 'pen_y',
+    message0: 'pen y',
+    output: 'Number',
+    colour: '#0FBD8C'
+  },
+
+  // ---- Camera ----
+  {
+    type: 'camera_zoom',
+    message0: 'set camera zoom to %1',
+    args0: [{ type: 'input_value', name: 'Z', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#E91E63'
+  },
+
+  // ---- Sprites ----
+  {
+    type: 'sprite_create',
+    message0: 'create sprite %1  shape %2  color %3',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'SHAPE', options: [['● circle','circle'],['■ square','square'],['▲ triangle','triangle'],['★ star','star'],['☁ puff','puff']] },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    message1: 'at x %1  y %2  size %3  gravity %4',
+    args1: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'field_dropdown', name: 'GRAVITY', options: [['off','off'],['on','on'],['static','static']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: false
+  },
+  {
+    type: 'sprite_move_to',
+    message0: 'move sprite %1 to x %2  y %3',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_change_x',
+    message0: 'change sprite %1 x by %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'N', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_change_y',
+    message0: 'change sprite %1 y by %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'N', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_set_size',
+    message0: 'set sprite %1 size to %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_set_color',
+    message0: 'set sprite %1 color to %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_rotate',
+    message0: 'rotate sprite %1 by %2 degrees',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'DEG', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_set_emoji',
+    message0: 'set sprite %1 emoji %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'EMOJI' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'Use any emoji (🚜 🏗️ 🚀 🐱 etc) as the sprite costume'
+  },
+  {
+    type: 'sprite_add_part',
+    message0: 'add part to sprite %1   shape %2   offset x %3 y %4   size %5   color %6   rotation %7°',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'SHAPE', options: [['● circle','circle'],['■ square','square'],['▲ triangle','triangle'],['★ star','star'],['☁ puff','puff'],['︿','arch']] },
+      { type: 'input_value', name: 'OX', check: 'Number' },
+      { type: 'input_value', name: 'OY', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' },
+      { type: 'input_value', name: 'ROT', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'Add a sub-shape on top of an existing sprite, positioned relative to the sprite center'
+  },
+  {
+    type: 'sprite_add_rect',
+    message0: 'add rectangle part to sprite %1   offset x %2 y %3   width %4   height %5   color %6   rotation %7°',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'OX', check: 'Number' },
+      { type: 'input_value', name: 'OY', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' },
+      { type: 'input_value', name: 'ROT', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'Add a non-square rectangle part — perfect for vehicle bodies, arms, treads'
+  },
+  {
+    type: 'sprite_clear_parts',
+    message0: 'clear parts of sprite %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_set_effect',
+    message0: 'set sprite %1 effect %2 to %3',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'EFFECT', options: [
+        ['trail length', 'trail'],
+        ['ghost (0–100)', 'ghost'],
+        ['glow size', 'glow']
+      ]},
+      { type: 'input_value', name: 'AMOUNT', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'trail = how many ghost-copies follow; ghost = transparency 0-100; glow = halo size'
+  },
+  {
+    type: 'sprite_clear_effects',
+    message0: 'clear effects from sprite %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_set_trail_particle',
+    message0: 'make sprite %1 leave %2 trail   size %3   color %4   life %5',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'SHAPE', options: [
+        ['☁ puff','puff'],['● circle','circle'],['■ square','square'],['▲ triangle','triangle'],['★ star','star'],['❌ off','off']
+      ]},
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' },
+      { type: 'input_value', name: 'LIFE', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'Sprite drops these shapes as it moves; each fades over LIFE frames. Set OFF to stop.'
+  },
+  {
+    type: 'sprite_set_footprint_trail',
+    message0: 'sprite %1 stamps footprints   alternating %2 then %3   every %4 px',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'LEFT' },
+      { type: 'input_value', name: 'RIGHT' },
+      { type: 'input_value', name: 'SPACING', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true,
+    tooltip: 'Drops permanent stamps as the sprite moves, auto-rotated to face the direction of motion. Use costumes for L/R designs.'
+  },
+  {
+    type: 'sprite_stop_footprint_trail',
+    message0: 'stop sprite %1 footprints',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_set_visible',
+    message0: '%1 sprite %2',
+    args0: [
+      { type: 'field_dropdown', name: 'STATE', options: [['show','show'],['hide','hide']] },
+      { type: 'input_value', name: 'NAME' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_delete',
+    message0: 'delete sprite %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_delete_all',
+    message0: 'delete all sprites',
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_x',
+    message0: "sprite %1 x",
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: 'Number',
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_y',
+    message0: "sprite %1 y",
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: 'Number',
+    colour: '#673AB7', inputsInline: true
+  },
+
+  // ---- Costumes ----
+  {
+    type: 'costume_define',
+    message0: 'define costume %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    message1: '%1',
+    args1: [{ type: 'input_statement', name: 'DO' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#03A9F4',
+    tooltip: 'Anything you draw inside becomes a reusable costume. Draw around origin (0,0).'
+  },
+  {
+    type: 'sprite_set_costume',
+    message0: 'set sprite %1 costume %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'COSTUME' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#03A9F4', inputsInline: true
+  },
+  {
+    type: 'sprite_clear_costume',
+    message0: 'remove costume from sprite %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#03A9F4'
+  },
+  {
+    type: 'costume_delete',
+    message0: 'delete costume %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#03A9F4'
+  },
+
+  // ---- Control ----
+  {
+    type: 'control_wait',
+    message0: 'wait %1 seconds',
+    args0: [{ type: 'input_value', name: 'SECS', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#FFAB19'
+  },
+  {
+    type: 'control_forever',
+    message0: 'forever',
+    message1: '%1',
+    args1: [{ type: 'input_statement', name: 'DO' }],
+    previousStatement: null,
+    colour: '#FFAB19',
+    tooltip: 'Loops forever — press Stop to end it'
+  },
+  {
+    type: 'control_stop_all',
+    message0: 'stop all',
+    previousStatement: null,
+    colour: '#FFAB19'
+  },
+
+  // ---- Color ----
+  {
+    type: 'my_colour_random',
+    message0: 'random color',
+    output: 'Colour',
+    colour: '#FF6680'
+  },
+  {
+    type: 'my_colour_rgb',
+    message0: 'rgb  r %1  g %2  b %3',
+    args0: [
+      { type: 'input_value', name: 'RED', check: 'Number' },
+      { type: 'input_value', name: 'GREEN', check: 'Number' },
+      { type: 'input_value', name: 'BLUE', check: 'Number' }
+    ],
+    output: 'Colour',
+    colour: '#FF6680', inputsInline: true
+  },
+  {
+    type: 'my_colour_hsl',
+    message0: 'hsl  h %1  s %2  l %3',
+    args0: [
+      { type: 'input_value', name: 'H', check: 'Number' },
+      { type: 'input_value', name: 'S', check: 'Number' },
+      { type: 'input_value', name: 'L', check: 'Number' }
+    ],
+    output: 'Colour',
+    colour: '#FF6680', inputsInline: true
+  },
+  {
+    type: 'sprite_set_solid',
+    message0: 'set sprite %1 solid %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'V', options: [['true','true'],['false','false']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_set_frozen',
+    message0: 'set sprite %1 frozen %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'V', options: [['true','true'],['false','false']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_set_gravity',
+    message0: 'set sprite %1 gravity %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'field_dropdown', name: 'G', options: [['off','off'],['on','on'],['static','static']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'sprite_touching_solid',
+    message0: 'is sprite %1 touching solid?',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: 'Boolean',
+    colour: '#673AB7'
+  },
+  {
+    type: 'sprite_on_ground',
+    message0: 'is sprite %1 on ground?',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: 'Boolean',
+    colour: '#673AB7'
+  },
+  {
+    type: 'set_ground',
+    message0: 'set ground to y %1',
+    args0: [{ type: 'input_value', name: 'Y', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA'
+  },
+  {
+    type: 'clear_ground',
+    message0: 'clear ground',
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA'
+  },
+  {
+    type: 'list_any_sprite_near',
+    message0: 'is any sprite in list %1 within %2 of x %3 y %4',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'DIST', check: 'Number' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    output: 'Boolean',
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'list_closest_sprite',
+    message0: 'closest sprite in list %1 to x %2 y %3',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    output: 'String',
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'terrain_change',
+    message0: 'change ground at x %1 width %2 by %3',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'D', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA', inputsInline: true
+  },
+  {
+    type: 'terrain_height',
+    message0: 'ground height at x %1',
+    args0: [{ type: 'input_value', name: 'X', check: 'Number' }],
+    output: 'Number',
+    colour: '#7B6BFA', inputsInline: true
+  },
+  {
+    type: 'terrain_reset',
+    message0: 'reset terrain',
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA'
+  },
+  {
+    type: 'terrain_dig',
+    message0: 'dig at x %1 width %2 depth %3',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'D', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA', inputsInline: true
+  },
+  {
+    type: 'terrain_dump',
+    message0: 'dump at x %1 width %2 height %3',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#7B6BFA', inputsInline: true
+  },
+  {
+    type: 'var_set_bool',
+    message0: 'set %1 to %2',
+    args0: [
+      { type: 'field_variable', name: 'VAR', variable: 'flag' },
+      { type: 'field_dropdown', name: 'V', options: [['true','true'],['false','false']] }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true
+  },
+  {
+    type: 'var_get_bool',
+    message0: '%1',
+    args0: [{ type: 'field_variable', name: 'VAR', variable: 'flag' }],
+    output: null,
+    colour: '#FF8C1A'
+  },
+]);
+
+// ---- Sprite-name picker (dynamic dropdown) ----
+Blockly.Blocks['sprite_name'] = {
+  init: function() {
+    const self = this;
+    const dd = new Blockly.FieldDropdown(function() {
+      const names = new Set();
+      try {
+        const allBlocks = (typeof workspace !== 'undefined' && workspace) ? workspace.getAllBlocks(false) : [];
+        for (const b of allBlocks) {
+          if (b.type === 'sprite_create') {
+            const nameInput = b.getInput('NAME');
+            if (nameInput && nameInput.connection && nameInput.connection.targetBlock()) {
+              const tb = nameInput.connection.targetBlock();
+              if (tb.type === 'text') {
+                const v = tb.getFieldValue('TEXT');
+                if (v) names.add(v);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+      // Preserve any currently-saved value even if it's not in the live list
+      try {
+        const cur = self.getFieldValue && self.getFieldValue('NAME');
+        if (cur) names.add(cur);
+      } catch (e) {}
+      const opts = Array.from(names).map(n => [n, n]);
+      if (!opts.length) opts.push(['(no sprites yet)', '']);
+      return opts;
+    });
+    // Strip Blockly's value-must-be-in-options validator (it nukes saved values
+    // when the options list is empty at load time)
+    dd.doClassValidation_ = function(v) { return v; };
+    this.appendDummyInput().appendField(dd, 'NAME');
+    this.setOutput(true, 'String');
+    this.setColour('#4B96C8');
+    this.setTooltip('Pick a sprite name. Refreshes from your create-sprite blocks.');
+  }
+};
+
+
+// ---- Keyboard (built with a key dropdown shared between two blocks) ----
+const KEY_OPTIONS = [
+  ['any key','any'], ['space','space'],
+  ['↑ up','up'], ['↓ down','down'], ['← left','left'], ['→ right','right'],
+  ['enter','enter']
+];
+for (const c of 'abcdefghijklmnopqrstuvwxyz') KEY_OPTIONS.push([c, c]);
+for (const c of '0123456789') KEY_OPTIONS.push([c, c]);
+
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'event_key_pressed',
+    message0: '⌨ when %1 pressed',
+    args0: [{ type: 'field_dropdown', name: 'KEY', options: KEY_OPTIONS }],
+    message1: '%1',
+    args1: [{ type: 'input_statement', name: 'DO' }],
+    colour: '#FF6E40',
+    tooltip: 'Body runs each time you press the chosen key'
+  },
+  {
+    type: 'key_pressed',
+    message0: '%1 pressed?',
+    args0: [{ type: 'field_dropdown', name: 'KEY', options: KEY_OPTIONS }],
+    output: 'Boolean',
+    colour: '#FF6E40',
+    tooltip: 'True while the key is being held down'
+  },
+  {
+    type: 'named_handler_define',
+    message0: '🎯 handler %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    message1: '%1',
+    args1: [{ type: 'input_statement', name: 'DO' }],
+    colour: '#FF6E40',
+    tooltip: 'Define a named action. It does NOT run by itself — only when "call handler" runs with the same name.'
+  },
+  {
+    type: 'named_handler_call',
+    message0: '📞 call handler %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF6E40',
+    tooltip: 'Run a defined handler by name. Drop me inside "when ↑ pressed" or wherever you want to trigger it.'
+  }
+]);
+
+// ---------- JS generators ----------
+const JG = Blockly.JavaScript;
+JG.forBlock['event_run'] = () => '';
+JG.forBlock['sprite_name'] = b => {
+  const name = b.getFieldValue('NAME') || '';
+  return [JSON.stringify(name), JG.ORDER_ATOMIC];
+};
+
+
+// Make math_arithmetic robust: coerce unset/blank operands to 0 instead of producing NaN
+JG.forBlock['math_arithmetic'] = function (block) {
+  const OPS = { ADD: ['+', JG.ORDER_ADDITION], MINUS: ['-', JG.ORDER_SUBTRACTION],
+                MULTIPLY: ['*', JG.ORDER_MULTIPLICATION], DIVIDE: ['/', JG.ORDER_DIVISION],
+                POWER: [null, JG.ORDER_NONE] };
+  const op = block.getFieldValue('OP');
+  const [opStr, order] = OPS[op];
+  const a = JG.valueToCode(block, 'A', JG.ORDER_NONE) || '0';
+  const b = JG.valueToCode(block, 'B', JG.ORDER_NONE) || '0';
+  if (op === 'POWER') return [`Math.pow(Number(${a})||0, Number(${b})||0)`, JG.ORDER_FUNCTION_CALL];
+  return [`((Number(${a})||0) ${opStr} (Number(${b})||0))`, order];
+};
+
+// Stage
+JG.forBlock['stage_clear'] = () => 'Stage.clear();\n';
+JG.forBlock['stage_clear_layer'] = b => `Stage.clearLayer('${b.getFieldValue('LAYER')}');\n`;
+JG.forBlock['stage_background'] = b => {
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#ffffff'";
+  return `Stage.background(${c});\n`;
+};
+JG.forBlock['draw_layer'] = b => `Stage.setLayer('${b.getFieldValue('LAYER')}');\n`;
+JG.forBlock['stage_set_size'] = b => {
+  const w = JG.valueToCode(b, 'W', JG.ORDER_ATOMIC) || '480';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_ATOMIC) || '360';
+  return `Stage._setSize(${w},${h});\n`;
+};
+JG.forBlock['stage_opacity'] = b => {
+  const a = JG.valueToCode(b, 'A', JG.ORDER_ATOMIC) || '1';
+  return `Stage.opacity(${a});\n`;
+};
+
+// Draw
+JG.forBlock['draw_circle'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const r = JG.valueToCode(b, 'R', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.circle(${x},${y},${r},${c});\n`;
+};
+JG.forBlock['draw_rect'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_ATOMIC) || '10';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.rect(${x},${y},${w},${h},${c});\n`;
+};
+JG.forBlock['draw_ellipse'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const rx = JG.valueToCode(b, 'RX', JG.ORDER_ATOMIC) || '10';
+  const ry = JG.valueToCode(b, 'RY', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.ellipse(${x},${y},${rx},${ry},${c});\n`;
+};
+JG.forBlock['draw_line'] = b => {
+  const x1 = JG.valueToCode(b, 'X1', JG.ORDER_ATOMIC) || '0';
+  const y1 = JG.valueToCode(b, 'Y1', JG.ORDER_ATOMIC) || '0';
+  const x2 = JG.valueToCode(b, 'X2', JG.ORDER_ATOMIC) || '0';
+  const y2 = JG.valueToCode(b, 'Y2', JG.ORDER_ATOMIC) || '0';
+  const t = JG.valueToCode(b, 'THICK', JG.ORDER_ATOMIC) || '1';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.line(${x1},${y1},${x2},${y2},${t},${c});\n`;
+};
+JG.forBlock['draw_triangle'] = b => {
+  const x1 = JG.valueToCode(b, 'X1', JG.ORDER_ATOMIC) || '0';
+  const y1 = JG.valueToCode(b, 'Y1', JG.ORDER_ATOMIC) || '0';
+  const x2 = JG.valueToCode(b, 'X2', JG.ORDER_ATOMIC) || '0';
+  const y2 = JG.valueToCode(b, 'Y2', JG.ORDER_ATOMIC) || '0';
+  const x3 = JG.valueToCode(b, 'X3', JG.ORDER_ATOMIC) || '0';
+  const y3 = JG.valueToCode(b, 'Y3', JG.ORDER_ATOMIC) || '0';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.triangle(${x1},${y1},${x2},${y2},${x3},${y3},${c});\n`;
+};
+JG.forBlock['draw_text'] = b => {
+  const m = JG.valueToCode(b, 'MSG', JG.ORDER_ATOMIC) || "''";
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const s = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '16';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.text(${m},${x},${y},${s},${c});\n`;
+};
+JG.forBlock['draw_puff'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const s = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '20';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#ccc'";
+  return `Stage.puff(${x},${y},${s},${c});\n`;
+};
+
+// Pen
+JG.forBlock['pen_down'] = () => 'Stage.penDown();\n';
+JG.forBlock['pen_up'] = () => 'Stage.penUp();\n';
+JG.forBlock['pen_goto'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  return `Stage.penGoto(${x},${y});\n`;
+};
+JG.forBlock['pen_color'] = b => {
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.penColor(${c});\n`;
+};
+JG.forBlock['pen_size'] = b => {
+  const s = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '1';
+  return `Stage.penSize(${s});\n`;
+};
+JG.forBlock['pen_set_direction'] = b => {
+  const d = JG.valueToCode(b, 'DEG', JG.ORDER_ATOMIC) || '0';
+  return `Stage.penSetDirection(${d});\n`;
+};
+JG.forBlock['pen_turn'] = b => {
+  const d = JG.valueToCode(b, 'DEG', JG.ORDER_ATOMIC) || '0';
+  const sign = b.getFieldValue('DIR') === 'left' ? '+' : '-';
+  return `Stage.penTurn(${sign}(${d}));\n`;
+};
+JG.forBlock['pen_move'] = b => {
+  const s = JG.valueToCode(b, 'STEPS', JG.ORDER_ATOMIC) || '0';
+  const sign = b.getFieldValue('DIR') === 'forward' ? '+' : '-';
+  return `Stage.penMove(${sign}(${s}));\n`;
+};
+JG.forBlock['pen_x'] = () => [`Stage._penInfo().x`, JG.ORDER_FUNCTION_CALL];
+JG.forBlock['pen_y'] = () => [`(-Stage._penInfo().y)`, JG.ORDER_UNARY_NEGATION];
+
+
+// Camera
+JG.forBlock['camera_zoom'] = b => {
+  const z = JG.valueToCode(b, 'Z', JG.ORDER_ATOMIC) || '1';
+  return `Stage.cameraZoom(${z});\n`;
+};
+
+// Sprites
+JG.forBlock['sprite_set_solid'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const v = b.getFieldValue('V') === 'true';
+  return `Stage.spriteSetSolid(${n}, ${v});\n`;
+};
+JG.forBlock['sprite_set_frozen'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const v = b.getFieldValue('V') === 'true';
+  return `Stage.spriteSetFrozen(${n}, ${v});\n`;
+};
+JG.forBlock['sprite_set_gravity'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const g = b.getFieldValue('G') || 'off';
+  return `Stage.spriteSetGravity(${n}, '${g}');\n`;
+};
+JG.forBlock['sprite_touching_solid'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return [`Stage.spriteTouchingSolid(${n})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['sprite_on_ground'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return [`Stage.spriteOnGround(${n})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['terrain_height'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  return [`Stage.terrainHeightAt(${x})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['terrain_reset'] = () => `Stage.resetTerrain();\n`;
+JG.forBlock['terrain_dig'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '20';
+  const d = JG.valueToCode(b, 'D', JG.ORDER_NONE) || '20';
+  return `Stage.digTerrain(${x}, ${w}, ${d});\n`;
+};
+JG.forBlock['terrain_dump'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '20';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_NONE) || '20';
+  return `Stage.dumpTerrain(${x}, ${w}, ${h});\n`;
+};
+JG.forBlock['terrain_change'] = b => {
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '20';
+  const d = JG.valueToCode(b, 'D', JG.ORDER_NONE) || '0';
+  return `Stage.dumpTerrain(${x}, ${w}, ${d});\n`;
+};
+JG.forBlock['var_set_bool'] = b => {
+  const v = JG.nameDB_.getName(b.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+  const val = b.getFieldValue('V');
+  return `${v} = ${val};\n`;
+};
+JG.forBlock['var_get_bool'] = b => {
+  const v = JG.nameDB_.getName(b.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+  return [v, JG.ORDER_ATOMIC];
+};
+JG.forBlock['set_ground'] = b => {
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  return `Stage.setGround(${y});\n`;
+};
+JG.forBlock['clear_ground'] = () => `Stage.clearGround();\n`;
+
+JG.forBlock['sprite_create'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const sh = b.getFieldValue('SHAPE');
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  const sz = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '20';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  const g = b.getFieldValue('GRAVITY') || 'off';
+  return `Stage.spriteCreate(${n},'${sh}',${x},${y},${sz},${c},'${g}');\n`;
+};
+JG.forBlock['sprite_move_to'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const x = JG.valueToCode(b, 'X', JG.ORDER_ATOMIC) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteMove(${n},${x},${y});\n`;
+};
+JG.forBlock['sprite_change_x'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const v = JG.valueToCode(b, 'N', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteChangeX(${n},${v});\n`;
+};
+JG.forBlock['sprite_change_y'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const v = JG.valueToCode(b, 'N', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteChangeY(${n},${v});\n`;
+};
+JG.forBlock['sprite_set_size'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const s = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '20';
+  return `Stage.spriteSetSize(${n},${s});\n`;
+};
+JG.forBlock['sprite_set_color'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  return `Stage.spriteSetColor(${n},${c});\n`;
+};
+JG.forBlock['sprite_rotate'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const d = JG.valueToCode(b, 'DEG', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteRotate(${n},${d});\n`;
+};
+JG.forBlock['sprite_set_emoji'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const e = JG.valueToCode(b, 'EMOJI', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteSetEmoji(${n},${e});\n`;
+};
+JG.forBlock['sprite_add_part'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const sh = b.getFieldValue('SHAPE');
+  const ox = JG.valueToCode(b, 'OX', JG.ORDER_ATOMIC) || '0';
+  const oy = JG.valueToCode(b, 'OY', JG.ORDER_ATOMIC) || '0';
+  const sz = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  const rt = JG.valueToCode(b, 'ROT', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteAddPart(${n},'${sh}',${ox},${oy},${sz},${c},${rt});\n`;
+};
+JG.forBlock['sprite_add_rect'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const ox = JG.valueToCode(b, 'OX', JG.ORDER_ATOMIC) || '0';
+  const oy = JG.valueToCode(b, 'OY', JG.ORDER_ATOMIC) || '0';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_ATOMIC) || '10';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#000'";
+  const rt = JG.valueToCode(b, 'ROT', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteAddRect(${n},${ox},${oy},${w},${h},${c},${rt});\n`;
+};
+JG.forBlock['sprite_clear_parts'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteClearParts(${n});\n`;
+};
+JG.forBlock['sprite_set_effect'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const eff = b.getFieldValue('EFFECT');
+  const amt = JG.valueToCode(b, 'AMOUNT', JG.ORDER_ATOMIC) || '0';
+  return `Stage.spriteSetEffect(${n},'${eff}',${amt});\n`;
+};
+JG.forBlock['sprite_clear_effects'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteClearEffects(${n});\n`;
+};
+JG.forBlock['sprite_set_trail_particle'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const sh = b.getFieldValue('SHAPE');
+  const sz = JG.valueToCode(b, 'SIZE', JG.ORDER_ATOMIC) || '10';
+  const c = JG.valueToCode(b, 'COLOR', JG.ORDER_ATOMIC) || "'#ccc'";
+  const life = JG.valueToCode(b, 'LIFE', JG.ORDER_ATOMIC) || '20';
+  return `Stage.spriteSetTrailParticle(${n},'${sh}',${sz},${c},${life});\n`;
+};
+JG.forBlock['sprite_set_footprint_trail'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const l = JG.valueToCode(b, 'LEFT', JG.ORDER_ATOMIC) || "''";
+  const r = JG.valueToCode(b, 'RIGHT', JG.ORDER_ATOMIC) || "''";
+  const sp = JG.valueToCode(b, 'SPACING', JG.ORDER_ATOMIC) || '15';
+  return `Stage.spriteSetFootprintTrail(${n},${l},${r},${sp});\n`;
+};
+JG.forBlock['sprite_stop_footprint_trail'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteSetFootprintTrail(${n},'','',0);\n`;
+};
+JG.forBlock['sprite_set_visible'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const state = b.getFieldValue('STATE');
+  return `Stage.spriteSetVisible(${n},${state === 'show' ? 'true' : 'false'});\n`;
+};
+JG.forBlock['sprite_delete'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteDelete(${n});\n`;
+};
+JG.forBlock['sprite_delete_all'] = () => 'Stage.spriteDeleteAll();\n';
+JG.forBlock['sprite_x'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return [`Stage.spriteX(${n})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['sprite_y'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return [`Stage.spriteY(${n})`, JG.ORDER_FUNCTION_CALL];
+};
+
+// Costumes
+JG.forBlock['costume_define'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const body = JG.statementToCode(b, 'DO');
+  return `Stage._beginCostume(${name});\n${body}Stage._endCostume();\n`;
+};
+JG.forBlock['sprite_set_costume'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const c = JG.valueToCode(b, 'COSTUME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteSetCostume(${n},${c});\n`;
+};
+JG.forBlock['sprite_clear_costume'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.spriteSetCostume(${n},null);\n`;
+};
+JG.forBlock['costume_delete'] = b => {
+  const n = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `Stage.costumeDelete(${n});\n`;
+};
+
+// Color
+JG.forBlock['my_colour_random'] = () => {
+  return [`'#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0')`, JG.ORDER_ATOMIC];
+};
+JG.forBlock['my_colour_rgb'] = b => {
+  const r = JG.valueToCode(b, 'RED', JG.ORDER_ATOMIC) || '0';
+  const g = JG.valueToCode(b, 'GREEN', JG.ORDER_ATOMIC) || '0';
+  const bl = JG.valueToCode(b, 'BLUE', JG.ORDER_ATOMIC) || '0';
+  return [`'rgb('+Math.round(${r})+','+Math.round(${g})+','+Math.round(${bl})+')'`, JG.ORDER_ATOMIC];
+};
+JG.forBlock['my_colour_hsl'] = b => {
+  const h = JG.valueToCode(b, 'H', JG.ORDER_ATOMIC) || '0';
+  const s = JG.valueToCode(b, 'S', JG.ORDER_ATOMIC) || '0';
+  const l = JG.valueToCode(b, 'L', JG.ORDER_ATOMIC) || '0';
+  return [`'hsl('+(${h})+','+(${s})+'%,'+(${l})+'%)'`, JG.ORDER_ATOMIC];
+};
+
+
+// ---- Lists ----
+JG.forBlock['list_create'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  return `Stage._listCreate(${name});\n`;
+};
+JG.forBlock['list_add'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const item = JG.valueToCode(b, 'ITEM', JG.ORDER_NONE) || "''";
+  return `Stage._listAdd(${name}, ${item});\n`;
+};
+JG.forBlock['list_item'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const idx = JG.valueToCode(b, 'INDEX', JG.ORDER_NONE) || '0';
+  return [`Stage._listItem(${name}, ${idx})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_length'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  return [`Stage._listLength(${name})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_set'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const idx = JG.valueToCode(b, 'INDEX', JG.ORDER_NONE) || '0';
+  const item = JG.valueToCode(b, 'ITEM', JG.ORDER_NONE) || "''";
+  return `Stage._listSet(${name}, ${idx}, ${item});\n`;
+};
+JG.forBlock['list_delete'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const idx = JG.valueToCode(b, 'INDEX', JG.ORDER_NONE) || '0';
+  return `Stage._listDelete(${name}, ${idx});\n`;
+};
+JG.forBlock['list_any_sprite_near'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const dist = JG.valueToCode(b, 'DIST', JG.ORDER_NONE) || '0';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return [`Stage._listAnySpriteNear(${name}, ${dist}, ${x}, ${y})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_closest_sprite'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return [`Stage._listClosestSprite(${name}, ${x}, ${y})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_clear'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  return `Stage._listClear(${name});\n`;
+};
+
+// Async My Blocks (custom procedures)
+JG.forBlock['procedures_defnoreturn'] = function(b) {
+  const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  const branch = JG.statementToCode(b, 'STACK');
+  return 'async function ' + name + '() {\n' + branch + '}\n';
+};
+JG.forBlock['procedures_callnoreturn'] = function(b) {
+  const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  return 'await ' + name + '();\n';
+};
+JG.forBlock['procedures_defreturn'] = function(b) {
+  const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  const branch = JG.statementToCode(b, 'STACK');
+  const ret = JG.valueToCode(b, 'RETURN', JG.ORDER_NONE) || '';
+  return 'async function ' + name + '() {\n' + branch + '  return ' + ret + ';\n}\n';
+};
+JG.forBlock['procedures_callreturn'] = function(b) {
+  const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  return ['(await ' + name + '())', JG.ORDER_FUNCTION_CALL];
+};
+// Keyboard
+JG.forBlock['event_key_pressed'] = b => {
+  const key = b.getFieldValue('KEY');
+  const body = JG.statementToCode(b, 'DO');
+  return `Stage._onKey('${key}', async () => {\n${body}});\n`;
+};
+JG.forBlock['key_pressed'] = b => {
+  const key = b.getFieldValue('KEY');
+  return [`Stage._isKeyDown('${key}')`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['named_handler_define'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  const body = JG.statementToCode(b, 'DO');
+  return `Stage._defineHandler(${name}, async () => {\n${body}});\n`;
+};
+JG.forBlock['named_handler_call'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_ATOMIC) || "''";
+  return `await Stage._callHandler(${name});\n`;
+};
+
+// Control
+JG.forBlock['control_wait'] = b => {
+  const s = JG.valueToCode(b, 'SECS', JG.ORDER_ATOMIC) || '1';
+  return `await Stage.wait(${s});\n`;
+};
+JG.forBlock['control_forever'] = b => {
+  const branch = JG.statementToCode(b, 'DO');
+  return `while (true) {\n  await Stage._tick();\n${branch}}\n`;
+};
+JG.forBlock['control_stop_all'] = () => 'Stage.stopAll();\n';
+
+// ---------- Init Blockly ----------
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: document.getElementById('toolbox'),
+  media: 'https://cdnjs.cloudflare.com/ajax/libs/blockly/10.4.3/media/',
+  renderer: 'zelos',
+  grid: { spacing: 22, length: 3, colour: '#d8d4c8', snap: true },
+  zoom: { controls: true, wheel: true, startScale: 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.2 },
+  trashcan: true,
+  move: { scrollbars: true, drag: true, wheel: false }
+});
+
+// Force inline editing for number/text fields on tablet (Blockly defaults to a popup on mobile)
+Blockly.FieldTextInput.prototype.showEditor_ = function (_e, quietInput) {
+  this.workspace_ = this.sourceBlock_.workspace;
+  this.showInlineEditor_(quietInput);
+};
+
+// --- Touch-friendly modal for variable naming / confirms (replaces flaky window.prompt) ---
+(function () {
+  function modal(message, defaultValue, isConfirm, callback) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;padding:20px;border-radius:14px;min-width:280px;max-width:90vw;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);';
+    const msg = document.createElement('div');
+    msg.textContent = message;
+    msg.style.cssText = 'font-size:15px;font-weight:600;color:#1a1a1f;';
+    box.appendChild(msg);
+    let input;
+    if (!isConfirm) {
+      input = document.createElement('input');
+      input.value = defaultValue || '';
+      input.style.cssText = 'padding:12px;border:1.5px solid #d8d4c8;border-radius:8px;font-size:16px;outline:none;';
+      input.addEventListener('focus', () => { input.style.borderColor = '#e91e63'; });
+      box.appendChild(input);
+    }
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel';
+    cancel.style.cssText = 'padding:10px 16px;border-radius:8px;border:1.5px solid #d8d4c8;background:#fff;font-size:14px;font-weight:600;cursor:pointer;';
+    const ok = document.createElement('button');
+    ok.textContent = 'OK';
+    ok.style.cssText = 'padding:10px 16px;border-radius:8px;border:none;background:#8bc34a;color:#0a0a0a;font-size:14px;font-weight:700;cursor:pointer;';
+    row.append(cancel, ok);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    if (input) { setTimeout(() => { input.focus(); input.select(); }, 50); }
+    function close(val) { document.body.removeChild(overlay); callback(val); }
+    cancel.onclick = () => close(isConfirm ? false : null);
+    ok.onclick = () => close(isConfirm ? true : (input ? input.value : ''));
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(isConfirm ? false : null); });
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') close(input.value);
+      if (e.key === 'Escape') close(null);
+    });
+  }
+  Blockly.dialog.setPrompt((message, defaultValue, callback) => modal(message, defaultValue, false, callback));
+  Blockly.dialog.setConfirm((message, callback) => modal(message, '', true, callback));
+  Blockly.dialog.setAlert((message, callback) => modal(message, '', true, () => callback && callback()));
+})();
+
+// ---------- Stage engine ----------
+let currentRunId = 0;
+const keyState = new Set();
+const lists = {};
+const keyHandlers = [];
+const namedHandlers = new Map();
+
+function normKey(k, code) {
+  if (k === ' ' || code === 'Space') return 'space';
+  if (k === 'ArrowUp' || code === 'ArrowUp') return 'up';
+  if (k === 'ArrowDown' || code === 'ArrowDown') return 'down';
+  if (k === 'ArrowLeft' || code === 'ArrowLeft') return 'left';
+  if (k === 'ArrowRight' || code === 'ArrowRight') return 'right';
+  if (k === 'Enter' || code === 'Enter' || code === 'NumpadEnter') return 'enter';
+  // Letter keys via code (works even when e.key gives weird IME results)
+  if (code && code.startsWith('Key')) return code.slice(3).toLowerCase();
+  if (code && code.startsWith('Digit')) return code.slice(5);
+  return String(k || '').toLowerCase();
+}
+let _keyDebugged = false;
+document.addEventListener('keydown', e => {
+  const tgt = e.target;
+  if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+  const k = normKey(e.key, e.code);
+  if (!_keyDebugged) {
+    _keyDebugged = true;
+    try { document.getElementById('log').textContent = `key event: "${e.key}" → "${k}" (handlers: ${keyHandlers.filter(h=>h.runId===currentRunId).length})`; } catch {}
+  }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault(); if (keyState.has(k)) return;
+  keyState.add(k);
+  _updateKeyDebug();
+  for (const h of keyHandlers.slice()) {
+    if (h.runId !== currentRunId) continue;
+    if (h.key === 'any' || h.key === k) h.fn();
+  }
+}, true);
+document.addEventListener('keyup', e => {
+  keyState.delete(normKey(e.key, e.code));
+  _updateKeyDebug();
+}, true);
+function _updateKeyDebug() {
+  const el = document.getElementById('keyDebug');
+  if (!el) return;
+  const keys = Array.from(keyState);
+  el.textContent = 'keys: ' + (keys.length ? keys.join(', ') : '(none)');
+}
+
+const Stage = (() => {
+  const stageEl = document.getElementById('stage');
+  const layers = {
+    bg: document.getElementById('layerBG'),
+    mid: document.getElementById('layerMID'),
+    fg: document.getElementById('layerFG')
+  };
+  const spritesCanvas = document.getElementById('layerSPRITES');
+  let spritesCtx = null;
+  const sprites = new Map();
+  const GRID_PX = 15;
+  // Cache: costume name -> { half:Number, tops:Array (relative-x bucket index -> top-y offset (negative for above center)) }
+  const _costumeColliders = new Map();
+  let _collisionScratchCanvas = null;
+  function _buildCostumeCollider(name) {
+    const cost = costumes.get(String(name)); if (!cost || !cost.ops || !cost.ops.length) return null;
+    // Find bounding box of all ops (cheap sweep)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const op of cost.ops) {
+      const r = (op.r !== undefined ? op.r : (op.thickness ? op.thickness/2 : 4));
+      const xs = []; const ys = [];
+      if (op.x !== undefined) { xs.push(op.x - (op.w ? op.w/2 : r)); xs.push(op.x + (op.w ? op.w/2 : r)); }
+      if (op.y !== undefined) { ys.push(op.y - (op.h ? op.h/2 : r)); ys.push(op.y + (op.h ? op.h/2 : r)); }
+      if (op.x1 !== undefined) { xs.push(op.x1 - r); xs.push(op.x1 + r); ys.push(op.y1 - r); ys.push(op.y1 + r); }
+      if (op.x2 !== undefined) { xs.push(op.x2 - r); xs.push(op.x2 + r); ys.push(op.y2 - r); ys.push(op.y2 + r); }
+      for (const x of xs) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      for (const y of ys) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    }
+    if (!isFinite(minX)) return null;
+    const w = Math.ceil(maxX - minX) + 4;
+    const h = Math.ceil(maxY - minY) + 4;
+    // Render to scratch canvas
+    if (!_collisionScratchCanvas) _collisionScratchCanvas = document.createElement('canvas');
+    const sc = _collisionScratchCanvas;
+    sc.width = w; sc.height = h;
+    const g = sc.getContext('2d');
+    g.clearRect(0, 0, w, h);
+    g.save();
+    g.translate(-minX + 2, -minY + 2);
+    drawCostumeOps(g, cost.ops);
+    g.restore();
+    // Sample: for each X bucket, find topmost opaque pixel
+    const buckets = Math.ceil(w / GRID_PX);
+    const tops = new Array(buckets).fill(null); // null = empty column, else top-y in costume-local coords
+    let img;
+    try { img = g.getImageData(0, 0, w, h); }
+    catch (e) { return null; } // tainted canvas? skip
+    const data = img.data;
+    for (let bx = 0; bx < buckets; bx++) {
+      const x0 = bx * GRID_PX;
+      const x1 = Math.min(w, x0 + GRID_PX);
+      let topY = null;
+      outer: for (let py = 0; py < h; py++) {
+        for (let px = x0; px < x1; px++) {
+          const a = data[(py * w + px) * 4 + 3];
+          if (a > 16) { topY = py; break outer; }
+        }
+      }
+      // Convert back to costume-local y (subtract padding + offset)
+      tops[bx] = (topY === null) ? null : (topY - 2 + minY);
+    }
+    return { minX: minX - 2, minY: minY - 2, w, h, tops, halfW: (maxX - minX) / 2 + 2 };
+  }
+  function _costumeTopAtX(spriteObj, worldX) {
+    // Returns internal-y top surface at worldX, or null if no surface there
+    const cost = spriteObj.costume && costumes.get(String(spriteObj.costume));
+    if (!cost) return null;
+    let collider = _costumeColliders.get(String(spriteObj.costume));
+    if (!collider) { collider = _buildCostumeCollider(spriteObj.costume); if (collider) _costumeColliders.set(String(spriteObj.costume), collider); }
+    if (!collider) return null;
+    // worldX -> costume-local x
+    const localX = worldX - spriteObj.x;
+    const bx = Math.floor((localX - collider.minX) / GRID_PX);
+    if (bx < 0 || bx >= collider.tops.length) return null;
+    const top = collider.tops[bx];
+    if (top === null) return null;
+    return spriteObj.y + top;
+  }
+  let groundY = 0;       // internal y (down-positive); represents user-space y=0 by default
+  let hasGround = false;
+  const TERRAIN_BUCKET = 5; // px per heightmap entry
+  // _terrain[bucketX] = delta from original ground (positive = pile above, negative = hole below)
+  let _terrain = new Map();
+  function _terrainBucket(x) { return Math.round(Number(x) / TERRAIN_BUCKET); }
+  function _terrainDelta(x) {
+    const v = _terrain.get(_terrainBucket(x));
+    return v == null ? 0 : v;
+  }
+  // Public: ground level (user-space y) at world x. Higher = pile, lower = hole.
+  function _terrainHeight(x) {
+    if (!hasGround) return null;
+    // groundY is internal-y (down-positive); user-space y = -groundY
+    return (-groundY) + _terrainDelta(x);
+  }
+  // Internal: the highest internal-y surface at x (for physics use)
+  function _terrainInternalY(x) {
+    if (!hasGround) return Infinity;
+    return groundY - _terrainDelta(x);
+  }
+  function _terrainModify(x, width, deltaChange) {
+    const half = Math.max(1, Math.round(Number(width) / 2));
+    const cx = Number(x);
+    for (let dx = -half; dx <= half; dx += TERRAIN_BUCKET) {
+      const bx = _terrainBucket(cx + dx);
+      const cur = _terrain.get(bx) || 0;
+      _terrain.set(bx, cur + deltaChange);
+    }
+  }
+  const GRAVITY_ACCEL = 0.6;        // px/frame² downward acceleration
+  const TERMINAL_VY = 18;           // px/frame cap
+  const BOUNCE_THRESHOLD = 50;      // impact energy below this = no bounce (just thud)
+  const BOUNCE_BASE = 0.45;         // baseline restitution
+  function _aabbOverlap(a, b) {
+    return Math.abs(a.x - b.x) < (a.size + b.size) &&
+           Math.abs(a.y - b.y) < (a.size + b.size);
+  }
+  function _physicsStep() {
+    for (const [, a] of sprites) {
+      if (a.gravity !== 'on' || a.frozen) continue;
+      a.vy = Math.min(TERMINAL_VY, (a.vy || 0) + GRAVITY_ACCEL);
+      let restY = Infinity;
+      if (hasGround) restY = _terrainInternalY(a.x);
+      for (const [, b] of sprites) {
+        if (b === a || !b.solid) continue;
+        const horizOverlap = Math.abs(a.x - b.x) < (a.size + b.size);
+        if (!horizOverlap) continue;
+        const topOfB = b.y - b.size;
+        if (topOfB >= (a.y + a.size) - 0.5 && topOfB < restY) restY = topOfB;
+      }
+      const targetY = restY - a.size;
+      const nextY = a.y + a.vy;
+      if (nextY >= targetY) {
+        const impactEnergy = a.vy * a.vy * a.size;
+        const sizeFactor = 1 - Math.min(0.95, a.size / 40);
+        const bounce = 0.2 + 0.5 * sizeFactor;
+        a.y = targetY;
+        if (impactEnergy > BOUNCE_THRESHOLD && a.vy > 1) {
+          a.vy = -a.vy * bounce;
+          if (Math.abs(a.vy) < 1.5) a.vy = 0;
+        } else {
+          a.vy = 0;
+        }
+      } else {
+        a.y = nextY;
+      }
+    }
+  }
+  const costumes = new Map();
+  let capturingCostume = null; // array of ops being captured
+  const ctxs = {};
+  let current = 'mid';
+  let W = 480, H = 360;
+  const cam = { zoom: 1 };
+  const pen = { down: false, color: '#000000', size: 2, x: 0, y: 0, dir: 0 };
+  let alpha = 1;
+  // Infinite-stage state
+  const layerOps = { bg: [], mid: [], fg: [] };
+  let bgColor = '#ffffff';
+  let panX = 0, panY = 0;
+  let bounds = null; // {minX, minY, maxX, maxY}
+  const PAD = 400;
+  const penCursor = document.getElementById('penCursor');
+  function setSize(w, h) {
+    W = Math.max(10, w | 0); H = Math.max(10, h | 0);
+    stageEl.style.width = W + 'px';
+    stageEl.style.height = H + 'px';
+    for (const k in layers) {
+      layers[k].width = W;
+      layers[k].height = H;
+      ctxs[k] = layers[k].getContext('2d');
+    }
+    if (spritesCanvas) {
+      spritesCanvas.width = W;
+      spritesCanvas.height = H;
+      spritesCtx = spritesCanvas.getContext('2d');
+    }
+    if (typeof clampPan === 'function') clampPan();
+
+  // ---- Live Watch Panel ----
+  const _watchSlots = [null, null, null]; // selected option ids per slot
+  function _watchOptions() {
+    // Returns flat list: [{id, label, sep}] including separator markers
+    const out = [];
+    // Variables (global var declarations)
+    out.push({id:'__sep_vars', label:'──── Variables ────', sep:true});
+    try {
+      // Grab user vars from project Blockly
+      if (typeof workspace !== 'undefined' && workspace) {
+        const vars = workspace.getAllVariables();
+        for (const v of vars) {
+          out.push({id:'var:' + v.name, label:v.name, sep:false});
+        }
+      }
+    } catch(e) {}
+    // Sprites
+    out.push({id:'__sep_sprites', label:'──── Sprites ────', sep:true});
+    try {
+      if (typeof sprites !== 'undefined') {
+        for (const [name] of sprites) {
+          out.push({id:'sx:'+name, label:name+' x', sep:false});
+          out.push({id:'sy:'+name, label:name+' y', sep:false});
+        }
+      }
+    } catch(e) {}
+    // Lists
+    out.push({id:'__sep_lists', label:'──── Lists (length) ────', sep:true});
+    try {
+      if (typeof lists !== 'undefined') {
+        for (const k in lists) {
+          out.push({id:'ll:'+k, label:k, sep:false});
+        }
+      }
+    } catch(e) {}
+    return out;
+  }
+  function _watchValue(id) {
+    if (!id || id.startsWith('__sep_')) return '';
+    const [kind, ...rest] = id.split(':');
+    const key = rest.join(':');
+    try {
+      if (kind === 'var') {
+        const v = (Stage._userVars || {})[key];
+        return v === undefined ? '?' : String(v);
+      }
+      if (kind === 'sx') {
+        const sp = sprites.get(key); return sp ? Math.round(sp.x) : '?';
+      }
+      if (kind === 'sy') {
+        const sp = sprites.get(key); return sp ? Math.round(-sp.y) : '?';
+      }
+      if (kind === 'll') {
+        return (lists[key] || []).length;
+      }
+    } catch(e) { return '?'; }
+    return '';
+  }
+  function _rebuildWatchDropdowns() {
+    const opts = _watchOptions();
+    document.querySelectorAll('.watchSel').forEach(sel => {
+      const slot = sel.dataset.slot;
+      // Read current value from the DOM (most authoritative) and from state
+      const prev = sel.value || _watchSlots[slot];
+      _watchSlots[slot] = prev;
+      // Build options into a fragment first; only swap at the end (avoids blink)
+      const frag = document.createDocumentFragment();
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '— pick —';
+      frag.appendChild(blank);
+      for (const o of opts) {
+        const op = document.createElement('option');
+        op.value = o.sep ? '' : o.id;
+        op.textContent = o.label;
+        if (o.sep) { op.disabled = true; op.style.color = '#ff0'; op.style.background = '#333'; }
+        frag.appendChild(op);
+      }
+      sel.replaceChildren(frag);
+      if (prev) sel.value = prev;
+    });
+    // Refresh values immediately after rebuild so no blank frame
+    _updateWatchValues();
+  }
+  function _updateWatchValues() {
+    document.querySelectorAll('.watchVal').forEach(span => {
+      const slot = span.dataset.slot;
+      const id = _watchSlots[slot];
+      span.textContent = id ? _watchValue(id) : '—';
+    });
+  }
+  document.querySelectorAll('.watchSel').forEach(sel => {
+    sel.addEventListener('change', () => {
+      _watchSlots[sel.dataset.slot] = sel.value || null;
+      _updateWatchValues();
+    });
+  });
+  document.getElementById('watchToggle')?.addEventListener('click', () => {
+    const panel = document.getElementById('watchPanel');
+    panel.style.display = (panel.style.display === 'none') ? 'flex' : 'none';
+  });
+  let _lastWatchOpts = '';
+  function _maybeRebuild() {
+    const opts = _watchOptions();
+    const sig = opts.map(o => o.id).join('|');
+    if (sig !== _lastWatchOpts) {
+      _lastWatchOpts = sig;
+      _rebuildWatchDropdowns();
+    }
+  }
+  setInterval(_maybeRebuild, 1000);
+  // Update values frequently
+  setInterval(_updateWatchValues, 100);
+  _rebuildWatchDropdowns();
+
+    if (typeof renderAll === 'function') renderAll();
+    if (typeof updateCursor === 'function') updateCursor();
+  }
+  setSize(W, H);
+  // Origin (0,0) at viewport center
+  panX = -W / 2; panY = -H / 2;
+
+  function _name(n) { return String(n == null ? '' : n); }
+
+  function expandBounds(x1, y1, x2, y2) {
+    if (x1 > x2) { const t = x1; x1 = x2; x2 = t; }
+    if (y1 > y2) { const t = y1; y1 = y2; y2 = t; }
+    if (!bounds) bounds = { minX: x1, minY: y1, maxX: x2, maxY: y2 };
+    else {
+      if (x1 < bounds.minX) bounds.minX = x1;
+      if (y1 < bounds.minY) bounds.minY = y1;
+      if (x2 > bounds.maxX) bounds.maxX = x2;
+      if (y2 > bounds.maxY) bounds.maxY = y2;
+    }
+  }
+  function clampPan() {
+    const b = bounds || { minX: 0, minY: 0, maxX: W / cam.zoom, maxY: H / cam.zoom };
+    const vw = W / cam.zoom, vh = H / cam.zoom;
+    const minPX = b.minX - PAD, maxPX = b.maxX + PAD - vw;
+    const minPY = b.minY - PAD, maxPY = b.maxY + PAD - vh;
+    if (minPX > maxPX) panX = (b.minX + b.maxX) / 2 - vw / 2;
+    else panX = Math.max(minPX, Math.min(maxPX, panX));
+    if (minPY > maxPY) panY = (b.minY + b.maxY) / 2 - vh / 2;
+    else panY = Math.max(minPY, Math.min(maxPY, panY));
+  }
+  function applyView(ctx) {
+    ctx.setTransform(cam.zoom, 0, 0, cam.zoom, -panX * cam.zoom, -panY * cam.zoom);
+  }
+  function applyOp(ctx, op) {
+    ctx.save();
+    ctx.globalAlpha = op.a == null ? 1 : op.a;
+    if (op.type === 'circle') {
+      ctx.fillStyle = op.c; ctx.beginPath(); ctx.arc(op.x, op.y, op.r, 0, Math.PI * 2); ctx.fill();
+    } else if (op.type === 'rect') {
+      ctx.fillStyle = op.c; ctx.fillRect(op.x, op.y, op.w, op.h);
+    } else if (op.type === 'ellipse') {
+      ctx.fillStyle = op.c; ctx.beginPath(); ctx.ellipse(op.x, op.y, op.rx, op.ry, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (op.type === 'line') {
+      ctx.strokeStyle = op.c; ctx.lineWidth = op.t; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(op.x1, op.y1); ctx.lineTo(op.x2, op.y2); ctx.stroke();
+    } else if (op.type === 'triangle') {
+      ctx.fillStyle = op.c; ctx.beginPath();
+      ctx.moveTo(op.x1, op.y1); ctx.lineTo(op.x2, op.y2); ctx.lineTo(op.x3, op.y3);
+      ctx.closePath(); ctx.fill();
+    } else if (op.type === 'text') {
+      ctx.fillStyle = op.c;
+      ctx.font = `${op.size}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(op.msg, op.x, op.y);
+    } else if (op.type === 'puff') {
+      const prevA = ctx.globalAlpha;
+      ctx.globalAlpha = prevA * 0.85;
+      ctx.fillStyle = op.c;
+      const sz = op.r;
+      const bumps = [
+        [0, 0, sz],
+        [-sz * 0.65, -sz * 0.25, sz * 0.7],
+        [sz * 0.55, -sz * 0.35, sz * 0.75],
+        [sz * 0.5, sz * 0.4, sz * 0.65],
+        [-sz * 0.55, sz * 0.4, sz * 0.7],
+        [0, -sz * 0.55, sz * 0.55],
+        [0, sz * 0.55, sz * 0.5]
+      ];
+      for (const [cx, cy, cr] of bumps) {
+        ctx.beginPath();
+        ctx.arc(op.x + cx, op.y + cy, cr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = prevA;
+    } else if (op.type === 'costume_stamp') {
+      const cost = costumes.get(op.costume);
+      if (cost) {
+        ctx.translate(op.x, op.y);
+        if (op.rot) ctx.rotate(op.rot * Math.PI / 180);
+        for (const cop of cost.ops) applyOp(ctx, cop);
+      }
+    }
+    ctx.restore();
+  }
+  function renderLayer(name) {
+    const ctx = ctxs[name]; if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    applyView(ctx);
+    for (const op of layerOps[name]) applyOp(ctx, op);
+  }
+  function renderBg() {
+    const ctx = ctxs.bg; if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+    applyView(ctx);
+    // Subtle dot grid in world space — visible motion reference
+    let spacing = 50;
+    while (W / cam.zoom / spacing > 80) spacing *= 2;
+    const dotR = 1 / cam.zoom;
+    const startX = Math.floor(panX / spacing) * spacing;
+    const startY = Math.floor(panY / spacing) * spacing;
+    const endX = panX + W / cam.zoom + spacing;
+    const endY = panY + H / cam.zoom + spacing;
+    ctx.fillStyle = 'rgba(120,120,140,0.45)';
+    for (let x = startX; x < endX; x += spacing) {
+      for (let y = startY; y < endY; y += spacing) {
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Layer 'bg' replays its ops on top of the dots
+    for (const op of layerOps.bg) applyOp(ctx, op);
+  }
+  function renderAll() {
+    renderBg();
+    renderLayer('mid');
+    renderLayer('fg');
+    if (typeof updateCursor === 'function') updateCursor();
+  }
+  function pushOp(layer, op) {
+    layerOps[layer].push(op);
+    // Update bounds based on op type
+    if (op.type === 'circle') expandBounds(op.x - op.r, op.y - op.r, op.x + op.r, op.y + op.r);
+    else if (op.type === 'rect') expandBounds(op.x, op.y, op.x + op.w, op.y + op.h);
+    else if (op.type === 'ellipse') expandBounds(op.x - op.rx, op.y - op.ry, op.x + op.rx, op.y + op.ry);
+    else if (op.type === 'line') expandBounds(op.x1, op.y1, op.x2, op.y2);
+    else if (op.type === 'triangle') {
+      const mnx = Math.min(op.x1, op.x2, op.x3), mxx = Math.max(op.x1, op.x2, op.x3);
+      const mny = Math.min(op.y1, op.y2, op.y3), mxy = Math.max(op.y1, op.y2, op.y3);
+      expandBounds(mnx, mny, mxx, mxy);
+    } else if (op.type === 'text') expandBounds(op.x, op.y, op.x + op.size * (op.msg.length * 0.6), op.y + op.size);
+    else if (op.type === 'puff') expandBounds(op.x - op.r * 1.2, op.y - op.r * 1.2, op.x + op.r * 1.2, op.y + op.r * 1.2);
+    else if (op.type === 'costume_stamp') expandBounds(op.x - 80, op.y - 80, op.x + 80, op.y + 80);
+    if (layer === 'bg') renderBg(); else renderLayer(layer);
+  }
+  function drawShape(g, shape, size, color, w, h) {
+    g.fillStyle = color;
+    const sz = Math.max(1, size || 10);
+    if (shape === 'circle') {
+      g.beginPath(); g.arc(0, 0, sz, 0, Math.PI * 2); g.fill();
+    } else if (shape === 'square') {
+      g.fillRect(-sz, -sz, sz * 2, sz * 2);
+    } else if (shape === 'rect') {
+      g.fillRect(-w / 2, -h / 2, w, h);
+    } else if (shape === 'triangle') {
+      g.beginPath();
+      g.moveTo(0, -sz);
+      g.lineTo(sz, sz);
+      g.lineTo(-sz, sz);
+      g.closePath(); g.fill();
+    } else if (shape === 'star') {
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? sz : sz * 0.5;
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+      g.closePath(); g.fill();
+    } else if (shape === 'puff') {
+      const prev = g.globalAlpha;
+      g.globalAlpha = prev * 0.85;
+      const bumps = [
+        [0, 0, sz],
+        [-sz * 0.65, -sz * 0.25, sz * 0.7],
+        [sz * 0.55, -sz * 0.35, sz * 0.75],
+        [sz * 0.5, sz * 0.4, sz * 0.65],
+        [-sz * 0.55, sz * 0.4, sz * 0.7],
+        [0, -sz * 0.55, sz * 0.55],
+        [0, sz * 0.55, sz * 0.5]
+      ];
+      for (const [cx, cy, cr] of bumps) {
+        g.beginPath(); g.arc(cx, cy, cr, 0, Math.PI * 2); g.fill();
+      }
+      g.globalAlpha = prev;
+    } else if (shape === 'arch') {
+      g.beginPath();
+      g.moveTo(-sz, sz);
+      g.quadraticCurveTo(0, -sz, sz, sz);
+      g.lineWidth = Math.max(2, sz * 0.25);
+      g.strokeStyle = g.fillStyle;
+      g.stroke();
+    }
+  }
+  function drawCostumeOps(g, ops) {
+    for (const op of ops) applyOp(g, op);
+  }
+  function drawSpriteBody(g, s) {
+    // Body = either costume → emoji → built-in shape, plus parts on top.
+    const cost = s.costume && costumes.get(s.costume);
+    if (cost) {
+      drawCostumeOps(g, cost.ops);
+    } else if (s.emoji) {
+      g.font = `${Math.max(8, s.size * 2)}px -apple-system, "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(s.emoji, 0, 0);
+    } else {
+      drawShape(g, s.shape, s.size, s.color);
+    }
+    for (const p of s.parts) {
+      g.save();
+      g.translate(p.ox || 0, p.oy || 0);
+      if (p.rotation) g.rotate(p.rotation * Math.PI / 180);
+      drawShape(g, p.shape, p.size, p.color, p.width, p.height);
+      g.restore();
+    }
+  }
+  // Cheap deterministic pseudo-random keyed on bucket — stable between frames
+  function _terrainNoise(bx, salt) {
+    const n = Math.sin((bx * 12.9898 + salt * 78.233)) * 43758.5453;
+    return n - Math.floor(n); // 0..1
+  }
+  function _drawTerrain() {
+    return; // disabled: project handles visuals
+    if (!hasGround) return;
+    if (!spritesCtx) return;
+    if (!_terrain.size) return;
+    const g = spritesCtx;
+    g.save();
+    g.setTransform(cam.zoom, 0, 0, cam.zoom, -panX * cam.zoom, -panY * cam.zoom);
+
+    // Group consecutive nonzero buckets into runs of same sign (so holes and piles are separate)
+    const sortedKeys = Array.from(_terrain.keys()).filter(k => _terrain.get(k) !== 0).sort((a, b) => a - b);
+    if (!sortedKeys.length) { g.restore(); return; }
+    const runs = []; // each: { sign:+/-1, buckets: [{bx,delta}, ...] }
+    let cur = null;
+    for (const bx of sortedKeys) {
+      const d = _terrain.get(bx);
+      const sign = d > 0 ? 1 : -1;
+      if (!cur || cur.sign !== sign || bx !== cur.lastBx + 1) {
+        cur = { sign, buckets: [], lastBx: bx };
+        runs.push(cur);
+      }
+      cur.buckets.push({ bx, delta: d });
+      cur.lastBx = bx;
+    }
+
+    const intGround = groundY;
+
+    for (const run of runs) {
+      const isPile = run.sign > 0;
+      const bs = run.buckets;
+      // Smooth path along the tops of buckets (interpolated)
+      const left = bs[0].bx * TERRAIN_BUCKET - TERRAIN_BUCKET / 2;
+      const right = bs[bs.length - 1].bx * TERRAIN_BUCKET + TERRAIN_BUCKET / 2;
+
+      // Build outline points: along the top (for piles) or along the bottom (for holes)
+      const topPts = bs.map(b => {
+        const x = b.bx * TERRAIN_BUCKET;
+        const surfaceY = intGround - b.delta; // delta > 0 = pile above; < 0 = hole's bottom
+        // Add jagged offset for holes only on lip; piles get smooth top
+        return { x, y: surfaceY };
+      });
+
+      g.beginPath();
+      if (isPile) {
+        // Pile: smooth mound top with rounded ends
+        g.moveTo(left, intGround);
+        // Smooth curve through tops
+        g.lineTo(left + TERRAIN_BUCKET / 2, topPts[0].y);
+        for (let i = 0; i < topPts.length - 1; i++) {
+          const cx = (topPts[i].x + topPts[i+1].x) / 2;
+          const cy = (topPts[i].y + topPts[i+1].y) / 2;
+          g.quadraticCurveTo(topPts[i].x, topPts[i].y, cx, cy);
+        }
+        g.quadraticCurveTo(topPts[topPts.length-1].x, topPts[topPts.length-1].y, right - TERRAIN_BUCKET / 2, topPts[topPts.length-1].y);
+        g.lineTo(right, intGround);
+        g.closePath();
+
+        const grad = g.createLinearGradient(0, intGround - Math.max(...bs.map(b=>b.delta)), 0, intGround);
+        grad.addColorStop(0, '#A06A35'); // light top
+        grad.addColorStop(1, '#5C3A1E'); // dark base
+        g.fillStyle = grad;
+        g.fill();
+        // Base shadow
+        g.fillStyle = 'rgba(0,0,0,0.18)';
+        g.fillRect(left, intGround - 2, right - left, 3);
+        // Dirt clumps near peak
+        g.fillStyle = '#6B4423';
+        for (const b of bs) {
+          if (b.delta < 4) continue;
+          const cx = b.bx * TERRAIN_BUCKET + (_terrainNoise(b.bx, 1) - 0.5) * 4;
+          const cy = intGround - b.delta + (_terrainNoise(b.bx, 2) - 0.5) * 2;
+          const r = 1 + _terrainNoise(b.bx, 3) * 1.5;
+          g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.fill();
+        }
+      } else {
+        // Hole: textured/jagged lip, rounded bottom, layered fill
+        const depth = Math.max(...bs.map(b => -b.delta));
+        // Compute jagged lip Y for each topPt (slight irregularity above the ground line)
+        const lipPts = bs.map(b => ({
+          x: b.bx * TERRAIN_BUCKET,
+          y: intGround + (_terrainNoise(b.bx, 7) - 0.5) * 1.5
+        }));
+        // Path: across lip (jagged), down right side, smooth across bottom, up left
+        g.moveTo(left, intGround);
+        // Jagged lip across
+        for (const lp of lipPts) g.lineTo(lp.x, lp.y);
+        g.lineTo(right, intGround);
+        // Down right
+        g.lineTo(right, intGround + depth);
+        // Bottom curve from right to left
+        for (let i = bs.length - 1; i >= 0; i--) {
+          const b = bs[i];
+          const x = b.bx * TERRAIN_BUCKET;
+          const y = intGround + (-b.delta);
+          if (i === bs.length - 1) g.lineTo(x, y);
+          else {
+            const prev = bs[i+1];
+            const cx = (x + prev.bx * TERRAIN_BUCKET) / 2;
+            const cy = (y + intGround + (-prev.delta)) / 2;
+            g.quadraticCurveTo(x, y, cx, cy);
+          }
+        }
+        g.lineTo(left, intGround + depth);
+        g.closePath();
+
+        // Black interior with a thin brown dirt-wall ring near the top
+        const grad = g.createLinearGradient(0, intGround, 0, intGround + depth);
+        grad.addColorStop(0, '#3E2814');  // brown at the lip
+        grad.addColorStop(0.35, '#1A0E05');
+        grad.addColorStop(1, '#000000');  // pure black deep
+        g.fillStyle = grad;
+        g.fill();
+
+        // Slight highlight along the inner lip (catches light)
+        g.save();
+        g.clip();
+        g.strokeStyle = 'rgba(140,90,45,0.6)';
+        g.lineWidth = 1.5;
+        g.beginPath();
+        for (let i = 0; i < lipPts.length; i++) {
+          const lp = lipPts[i];
+          if (i === 0) g.moveTo(lp.x, lp.y + 1);
+          else g.lineTo(lp.x, lp.y + 1);
+        }
+        g.stroke();
+        g.restore();
+
+        // Dark rim along the lip
+        g.beginPath();
+        g.moveTo(left, intGround);
+        for (const lp of lipPts) g.lineTo(lp.x, lp.y);
+        g.lineTo(right, intGround);
+        g.strokeStyle = '#1A0E05';
+        g.lineWidth = 1;
+        g.stroke();
+      }
+    }
+    g.restore();
+  }
+  // marker for fancyTerrain version
+  const fancyTerrain = true;
+  function renderSprites() {
+    if (!spritesCtx) return;
+    spritesCtx.setTransform(1, 0, 0, 1, 0, 0);
+    spritesCtx.clearRect(0, 0, W, H);
+    spritesCtx.setTransform(cam.zoom, 0, 0, cam.zoom, -panX * cam.zoom, -panY * cam.zoom);
+    _drawTerrain();
+    for (const s of sprites.values()) {
+      if (!s.visible) continue;
+      const g = spritesCtx;
+
+      // Footprint stamps (permanent, layered, auto-rotated to motion direction)
+      if (s.stampCostumes && s.stampLast) {
+        const dx = s.x - s.stampLast.x, dy = s.y - s.stampLast.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist >= s.stampSpacing) {
+          s.stampLast.i = (s.stampLast.i + 1) % s.stampCostumes.length;
+          s.stampLast.x = s.x;
+          s.stampLast.y = s.y;
+          const rotDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+          pushOp(s.stampLayer || 'mid', {
+            type: 'costume_stamp',
+            x: s.x, y: s.y, rot: rotDeg,
+            costume: s.stampCostumes[s.stampLast.i],
+            a: 1
+          });
+        }
+      }
+
+      // Emit + age particles (if particle trail configured)
+      if (s.pShape) {
+        if (!s.particles) s.particles = [];
+        // Only emit if the sprite actually moved this frame (avoid pile-up when stationary)
+        const last = s.particles[s.particles.length - 1];
+        if (!last || last.x !== s.x || last.y !== s.y) {
+          s.particles.push({ x: s.x, y: s.y, age: 0 });
+        }
+        // Render existing
+        for (const p of s.particles) {
+          const fade = 1 - p.age / s.pLife;
+          if (fade <= 0) continue;
+          g.save();
+          g.globalAlpha = fade * (1 - s.ghost / 100);
+          g.translate(p.x, p.y);
+          drawShape(g, s.pShape, s.pSize, s.pColor);
+          g.restore();
+          p.age += 1;
+        }
+        // Drop dead
+        while (s.particles.length && s.particles[0].age >= s.pLife) s.particles.shift();
+      }
+
+      // Sample current frame into echo trail (if enabled)
+      if (s.trailLen > 0) {
+        s.trail.push({ x: s.x, y: s.y, rot: s.rotation });
+        while (s.trail.length > s.trailLen) s.trail.shift();
+      }
+
+      // Draw trail copies first (oldest = faintest)
+      if (s.trailLen > 0 && s.trail.length > 1) {
+        const n = s.trail.length;
+        for (let i = 0; i < n - 1; i++) {
+          const t = s.trail[i];
+          const fade = (i + 1) / n; // 0..1
+          g.save();
+          g.globalAlpha = fade * 0.5 * (1 - s.ghost / 100);
+          g.translate(t.x, t.y);
+          g.rotate(t.rot * Math.PI / 180);
+          drawSpriteBody(g, s);
+          g.restore();
+        }
+      }
+
+      // Main sprite
+      g.save();
+      g.globalAlpha = 1 - s.ghost / 100;
+      if (s.glow > 0) {
+        g.shadowBlur = s.glow;
+        g.shadowColor = s.color || '#fff';
+      }
+      g.translate(s.x, s.y);
+      g.rotate(s.rotation * Math.PI / 180);
+      drawSpriteBody(g, s);
+      g.restore();
+    }
+  }
+  (function spriteLoop() {
+    renderSprites();
+    requestAnimationFrame(spriteLoop);
+  })();
+
+  function updateCursor() {
+    if (!penCursor) return;
+    const sx = (pen.x - panX) * cam.zoom;
+    const sy = (pen.y - panY) * cam.zoom;
+    const visible = sx >= -22 && sx <= W + 22 && sy >= -22 && sy <= H + 22;
+    penCursor.style.display = visible ? 'flex' : 'none';
+    penCursor.style.left = sx + 'px';
+    penCursor.style.top = sy + 'px';
+    // CSS rotate uses screen-space (y-down): math 0°=right is x-axis; negate for screen
+    const liftY = pen.down ? '0' : '-5px';
+    penCursor.style.transform = `translateY(${liftY}) rotate(${-pen.dir}deg)`;
+    penCursor.dataset.state = pen.down ? 'down' : 'up';
+  }
+  updateCursor();
+  renderAll();
+
+  return {
+    // ---- layer & state ----
+    setLayer(l) { if (ctxs[l]) current = l; },
+    opacity(a) { alpha = Math.max(0, Math.min(1, Number(a))); },
+
+    // ---- clears & bg ----
+    clear() {
+      layerOps.bg = []; layerOps.mid = []; layerOps.fg = [];
+      bounds = null;
+      renderAll();
+    },
+    clearLayer(name) {
+      if (!layerOps[name]) return;
+      layerOps[name] = [];
+      // bounds may shrink; cheap to rebuild from remaining ops
+      bounds = null;
+      for (const k in layerOps) for (const op of layerOps[k]) {
+        if (op.type === 'circle') expandBounds(op.x - op.r, op.y - op.r, op.x + op.r, op.y + op.r);
+        else if (op.type === 'rect') expandBounds(op.x, op.y, op.x + op.w, op.y + op.h);
+        else if (op.type === 'ellipse') expandBounds(op.x - op.rx, op.y - op.ry, op.x + op.rx, op.y + op.ry);
+        else if (op.type === 'line') expandBounds(op.x1, op.y1, op.x2, op.y2);
+        else if (op.type === 'triangle') {
+          const mnx = Math.min(op.x1, op.x2, op.x3), mxx = Math.max(op.x1, op.x2, op.x3);
+          const mny = Math.min(op.y1, op.y2, op.y3), mxy = Math.max(op.y1, op.y2, op.y3);
+          expandBounds(mnx, mny, mxx, mxy);
+        } else if (op.type === 'text') expandBounds(op.x, op.y, op.x + op.size, op.y + op.size);
+        else if (op.type === 'puff') expandBounds(op.x - op.r * 1.2, op.y - op.r * 1.2, op.x + op.r * 1.2, op.y + op.r * 1.2);
+    else if (op.type === 'costume_stamp') expandBounds(op.x - 80, op.y - 80, op.x + 80, op.y + 80);
+      }
+      renderAll();
+    },
+    background(c) { bgColor = c; renderBg(); },
+
+    // ---- shapes (ops-based: layered, or captured into costume) ----
+    // Y is user-space (up-positive); we flip to internal screen-y on the way in.
+    circle(x, y, r, c) {
+      y = -y;
+      const op = { type: 'circle', x, y, r: Math.abs(r), c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    rect(x, y, w, h, c) {
+      // User: (x,y) is bottom-left, +h grows up. Internal top-left = (x, -(y+h)).
+      const iy = -(y + h);
+      const op = { type: 'rect', x, y: iy, w, h, c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    ellipse(x, y, rx, ry, c) {
+      y = -y;
+      const op = { type: 'ellipse', x, y, rx: Math.abs(rx), ry: Math.abs(ry), c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    line(x1, y1, x2, y2, thick, c) {
+      y1 = -y1; y2 = -y2;
+      const op = { type: 'line', x1, y1, x2, y2, t: Math.max(0.1, thick), c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    triangle(x1, y1, x2, y2, x3, y3, c) {
+      y1 = -y1; y2 = -y2; y3 = -y3;
+      const op = { type: 'triangle', x1, y1, x2, y2, x3, y3, c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    text(msg, x, y, size, c) {
+      y = -y;
+      const op = { type: 'text', msg: String(msg), x, y, size: Math.max(1, size), c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+    puff(x, y, size, c) {
+      y = -y;
+      const op = { type: 'puff', x, y, r: Math.max(1, size), c, a: alpha };
+      if (capturingCostume) return capturingCostume.push(op);
+      pushOp(current, op);
+    },
+
+    // ---- pen ----
+    penDown() { pen.down = true; if (!capturingCostume) updateCursor(); },
+    penUp() { pen.down = false; if (!capturingCostume) updateCursor(); },
+    penColor(c) { pen.color = c; },
+    penSize(n) { pen.size = Math.max(0.1, Number(n)); },
+    penGoto(x, y) {
+      y = -y;
+      if (pen.down) {
+        const op = { type: 'line', x1: pen.x, y1: pen.y, x2: x, y2: y, t: pen.size, c: pen.color, a: alpha };
+        if (capturingCostume) capturingCostume.push(op);
+        else pushOp(current, op);
+      }
+      pen.x = x; pen.y = y;
+      if (!capturingCostume) updateCursor();
+    },
+    penSetDirection(deg) { pen.dir = Number(deg) || 0; },
+    penTurn(deg) { pen.dir += Number(deg) || 0; },
+    penMove(steps) {
+      // Math direction: 0° = right, 90° = up (matches Y-up world)
+      const rad = pen.dir * Math.PI / 180;
+      const dx = Math.cos(rad) * steps;
+      const dy = -Math.sin(rad) * steps; // negate because internal y grows downward
+      const nx = pen.x + dx, ny = pen.y + dy;
+      if (pen.down) {
+        const op = { type: 'line', x1: pen.x, y1: pen.y, x2: nx, y2: ny, t: pen.size, c: pen.color, a: alpha };
+        if (capturingCostume) capturingCostume.push(op);
+        else pushOp(current, op);
+      }
+      pen.x = nx; pen.y = ny;
+      if (!capturingCostume) updateCursor();
+    },
+
+    // ---- camera ----
+    cameraZoom(z) { cam.zoom = Math.max(0.05, Number(z) || 1); clampPan(); renderAll(); },
+
+    // ---- sprites ----
+    spriteCreate(name, shape, x, y, size, color, gravity) {
+      y = -y;
+      const sz = Number(size) || 20;
+      const g = (gravity === 'on' || gravity === 'static') ? gravity : 'off';
+      const solid = (g === 'on' || g === 'static');
+      sprites.set(_name(name), { shape, x: Number(x) || 0, y: Number(y) || 0, size: sz, color: color || '#000', visible: true, rotation: 0, emoji: null, parts: [], costume: null, trailLen: 0, trail: [], ghost: 0, glow: 0, pShape: null, particles: [], stampCostumes: null, stampLast: null, gravity: g, solid, frozen: false, vy: 0 });
+      expandBounds(Number(x) - sz, Number(y) - sz, Number(x) + sz, Number(y) + sz);
+    },
+    spriteSetSolid(name, val) { const sp = sprites.get(_name(name)); if (sp) sp.solid = !!val; },
+    spriteSetFrozen(name, val) { const sp = sprites.get(_name(name)); if (sp) sp.frozen = !!val; },
+    spriteSetGravity(name, g) {
+      const sp = sprites.get(_name(name)); if (!sp) return;
+      sp.gravity = (g === 'on' || g === 'static') ? g : 'off';
+      if (sp.gravity === 'off') sp.vy = 0;
+    },
+    setGround(y) { groundY = -Number(y); hasGround = true; _terrain.clear(); },
+    digTerrain(x, width, depth) { _terrainModify(x, width, -Math.abs(Number(depth))); },
+    dumpTerrain(x, width, height) { _terrainModify(x, width, Number(height)); },
+    terrainHeightAt(x) { return hasGround ? (-groundY + _terrainDelta(x)) : 0; },
+    resetTerrain() { _terrain.clear(); },
+    clearGround() { hasGround = false; },
+    spriteTouchingSolid(name) {
+      const a = sprites.get(_name(name)); if (!a) return false;
+      for (const [k, b] of sprites) {
+        if (b === a || !b.solid) continue;
+        if (_aabbOverlap(a, b)) return true;
+      }
+      return false;
+    },
+    spriteOnGround(name) {
+      const a = sprites.get(_name(name)); if (!a) return false;
+      const bottom = a.y + a.size;
+      if (hasGround && bottom >= groundY - 1) return true;
+      for (const [k, b] of sprites) {
+        if (b === a || !b.solid) continue;
+        // 'on top of b' = horizontally overlapping AND a's bottom near b's top
+        const horizOverlap = Math.abs(a.x - b.x) < (a.size + b.size);
+        const topOfB = b.y - b.size;
+        if (horizOverlap && Math.abs(bottom - topOfB) <= 1) return true;
+      }
+      return false;
+    },
+    spriteMove(name, x, y) {
+      y = -y;
+      const s = sprites.get(_name(name)); if (!s) return;
+      s.x = Number(x) || 0; s.y = Number(y) || 0;
+      expandBounds(s.x - s.size, s.y - s.size, s.x + s.size, s.y + s.size);
+    },
+    spriteChangeX(name, n) { const s = sprites.get(_name(name)); if (s) { s.x += Number(n) || 0; expandBounds(s.x - s.size, s.y - s.size, s.x + s.size, s.y + s.size); } },
+    spriteChangeY(name, n) { const s = sprites.get(_name(name)); if (s) { s.y -= Number(n) || 0; expandBounds(s.x - s.size, s.y - s.size, s.x + s.size, s.y + s.size); } },
+    spriteSetSize(name, sz) { const s = sprites.get(_name(name)); if (s) s.size = Math.max(0.1, Number(sz) || 0); },
+    spriteSetColor(name, c) { const s = sprites.get(_name(name)); if (s) s.color = c; },
+    spriteRotate(name, deg) { const s = sprites.get(_name(name)); if (s) s.rotation += Number(deg) || 0; },
+    spriteSetEmoji(name, emoji) {
+      let s = sprites.get(_name(name));
+      if (!s) { s = { shape: 'circle', x: W/2, y: H/2, size: 20, color: '#000', visible: true, rotation: 0, emoji: null, parts: [], costume: null, trailLen: 0, trail: [], ghost: 0, glow: 0, pShape: null, particles: [], stampCostumes: null, stampLast: null }; sprites.set(_name(name), s); }
+      s.emoji = String(emoji || '') || null;
+    },
+    spriteAddPart(name, shape, ox, oy, size, color, rotation) {
+      oy = -oy;
+      const s = sprites.get(_name(name)); if (!s) return;
+      s.parts.push({ shape, ox: Number(ox) || 0, oy: Number(oy) || 0, size: Number(size) || 10, color: color || '#000', rotation: Number(rotation) || 0 });
+    },
+    spriteAddRect(name, ox, oy, w, h, color, rotation) {
+      oy = -oy;
+      const s = sprites.get(_name(name)); if (!s) return;
+      s.parts.push({ shape: 'rect', ox: Number(ox) || 0, oy: Number(oy) || 0, width: Number(w) || 10, height: Number(h) || 10, color: color || '#000', rotation: Number(rotation) || 0 });
+    },
+    spriteClearParts(name) { const s = sprites.get(_name(name)); if (s) s.parts = []; },
+    spriteSetEffect(name, effect, amount) {
+      const s = sprites.get(_name(name)); if (!s) return;
+      const a = Number(amount) || 0;
+      if (effect === 'trail') {
+        s.trailLen = Math.max(0, Math.min(40, Math.round(a)));
+        if (s.trailLen === 0) s.trail = [];
+      } else if (effect === 'ghost') {
+        s.ghost = Math.max(0, Math.min(100, a));
+      } else if (effect === 'glow') {
+        s.glow = Math.max(0, a);
+      }
+    },
+    spriteSetTrailParticle(name, shape, size, color, life) {
+      const s = sprites.get(_name(name)); if (!s) return;
+      if (shape === 'off' || !shape) {
+        s.pShape = null; s.particles = [];
+      } else {
+        s.pShape = String(shape);
+        s.pSize = Math.max(1, Number(size) || 10);
+        s.pColor = color || s.color || '#ccc';
+        s.pLife = Math.max(1, Number(life) || 20);
+        if (!s.particles) s.particles = [];
+      }
+    },
+    spriteSetFootprintTrail(name, left, right, spacing) {
+      const s = sprites.get(_name(name)); if (!s) return;
+      const lc = String(left || '');
+      const rc = String(right || lc);
+      if (!lc || !spacing) {
+        s.stampCostumes = null;
+        s.stampLast = null;
+        return;
+      }
+      s.stampCostumes = [lc, rc];
+      s.stampSpacing = Math.max(1, Number(spacing));
+      s.stampLayer = current;
+      s.stampLast = { x: s.x, y: s.y, i: -1 }; // -1 → first emitted stamp is index 0
+    },
+    spriteClearEffects(name) {
+      const s = sprites.get(_name(name)); if (!s) return;
+      s.trailLen = 0; s.trail = []; s.ghost = 0; s.glow = 0;
+      s.pShape = null; s.particles = [];
+      s.stampCostumes = null; s.stampLast = null;
+    },
+    spriteSetVisible(name, v) { const s = sprites.get(_name(name)); if (s) s.visible = !!v; },
+    spriteDelete(name) { sprites.delete(_name(name)); },
+    spriteDeleteAll() { sprites.clear(); },
+    spriteX(name) { const s = sprites.get(_name(name)); return s ? s.x : 0; },
+    spriteY(name) { const s = sprites.get(_name(name)); return s ? -s.y : 0; },
+    spriteSetCostume(name, costume) {
+      let s = sprites.get(_name(name));
+      if (!s) {
+        s = { shape: 'circle', x: W/2, y: H/2, size: 20, color: '#000', visible: true, rotation: 0, emoji: null, parts: [], costume: null, trailLen: 0, trail: [], ghost: 0, glow: 0, pShape: null, particles: [], stampCostumes: null, stampLast: null };
+        sprites.set(_name(name), s);
+      }
+      s.costume = costume == null || costume === '' ? null : String(costume);
+    },
+
+    // ---- costumes ----
+    _beginCostume(name) {
+      capturingCostume = [];
+      costumes.set(String(name == null ? '' : name), { ops: capturingCostume });
+      _costumeColliders.delete(String(name == null ? '' : name));
+      // Snapshot pen state so costume drawing doesn't leak out
+      this._penSnapshot = { ...pen };
+      // Start the costume with a fresh pen at origin, lifted
+      pen.x = 0; pen.y = 0; pen.down = false;
+    },
+    _endCostume() {
+      capturingCostume = null;
+      if (this._penSnapshot) { Object.assign(pen, this._penSnapshot); this._penSnapshot = null; }
+      updateCursor();
+    },
+    costumeDelete(name) { costumes.delete(String(name == null ? '' : name)); },
+
+    // ---- control / timing ----
+    async wait(seconds) {
+      const myId = currentRunId;
+      const totalMs = Math.max(0, Number(seconds) * 1000);
+      const start = Date.now();
+      while (Date.now() - start < totalMs) {
+        if (myId !== currentRunId) throw new Error('__STOPPED__');
+        const remaining = totalMs - (Date.now() - start);
+        await new Promise(r => setTimeout(r, Math.min(50, remaining)));
+      }
+      if (myId !== currentRunId) throw new Error('__STOPPED__');
+    },
+    async _tick() {
+      const myId = currentRunId;
+      _physicsStep();
+      await new Promise(r => requestAnimationFrame(r));
+      if (myId !== currentRunId) throw new Error('__STOPPED__');
+    },
+    stopAll() { throw new Error('__STOPPED__'); },
+
+    // ---- keyboard ----
+    _onKey(key, fn) {
+      const myRunId = currentRunId;
+      keyHandlers.push({
+        key: String(key),
+        runId: myRunId,
+        fn: async () => {
+          try { await fn(); }
+          catch (e) { if (!(e && e.message === '__STOPPED__')) console.error(e); }
+        }
+      });
+    },
+    _isKeyDown(key) { return keyState.has(String(key)); },
+
+    // ---- named handlers (define + call by name) ----
+    _defineHandler(name, fn) {
+      namedHandlers.set(String(name == null ? '' : name), fn);
+    },
+    async _callHandler(name) {
+      const fn = namedHandlers.get(String(name == null ? '' : name));
+      if (typeof fn === 'function') await fn();
+    },
+    _resetHandlers() { namedHandlers.clear(); },
+
+    // ---- helpers ----
+    // ---- Lists (persistent) ----
+    _listCreate(name) { lists[String(name)] = []; },
+    _listAdd(name, item) {
+      const k = String(name); if (!lists[k]) lists[k] = []; lists[k].push(item);
+    },
+    _listItem(name, idx) {
+      const arr = lists[String(name)]; if (!arr) return '';
+      const i = Math.floor(Number(idx)) - 1;
+      return (i >= 0 && i < arr.length) ? arr[i] : '';
+    },
+    _listLength(name) {
+      const arr = lists[String(name)]; return arr ? arr.length : 0;
+    },
+    _listSet(name, idx, item) {
+      const arr = lists[String(name)]; if (!arr) return;
+      const i = Math.floor(Number(idx)) - 1;
+      if (i >= 0 && i < arr.length) arr[i] = item;
+    },
+    _listDelete(name, idx) {
+      const arr = lists[String(name)]; if (!arr) return;
+      const i = Math.floor(Number(idx)) - 1;
+      if (i >= 0 && i < arr.length) arr.splice(i, 1);
+    },
+    _listClear(name) { lists[String(name)] = []; },
+    _listAnySpriteNear(listName, dist, x, y) {
+      const arr = lists[String(listName)]; if (!arr) return false;
+      const d2 = Number(dist) * Number(dist);
+      const tx = Number(x); const ty = -Number(y); // convert user-space y to internal
+      for (const item of arr) {
+        const sp = sprites.get(String(item)); if (!sp) continue;
+        const dx = sp.x - tx, dy = sp.y - ty;
+        if (dx*dx + dy*dy < d2) return true;
+      }
+      return false;
+    },
+    _listClosestSprite(listName, x, y) {
+      const arr = lists[String(listName)]; if (!arr || !arr.length) return '';
+      const tx = Number(x); const ty = -Number(y);
+      let best = '', bestD2 = Infinity;
+      for (const item of arr) {
+        const sp = sprites.get(String(item)); if (!sp) continue;
+        const dx = sp.x - tx, dy = sp.y - ty;
+        const d2 = dx*dx + dy*dy;
+        if (d2 < bestD2) { bestD2 = d2; best = String(item); }
+      }
+      return best;
+    },
+    _dumpLists() { return JSON.parse(JSON.stringify(lists)); },
+    _loadLists(obj) {
+      for (const k in lists) delete lists[k];
+      if (obj && typeof obj === 'object') {
+        for (const k in obj) if (Array.isArray(obj[k])) lists[k] = obj[k].slice();
+      }
+    },
+    _setSize: setSize,
+    _cam: () => ({ zoom: cam.zoom }),
+    _pan: () => ({ x: panX, y: panY }),
+    _penInfo: () => ({ x: pen.x, y: pen.y }),
+    _size: () => ({ W, H }),
+    _panBy(dxPx, dyPx) {
+      panX -= dxPx / cam.zoom;
+      panY -= dyPx / cam.zoom;
+      clampPan();
+      renderAll();
+    },
+    _center() {
+      const vw = W / cam.zoom, vh = H / cam.zoom;
+      if (bounds) {
+        panX = (bounds.minX + bounds.maxX) / 2 - vw / 2;
+        panY = (bounds.minY + bounds.maxY) / 2 - vh / 2;
+      } else {
+        panX = -vw / 2; panY = -vh / 2;
+      }
+      clampPan();
+      renderAll();
+    },
+    _recenterIfEmpty() {
+      if (!bounds) {
+        const vw = W / cam.zoom, vh = H / cam.zoom;
+        panX = -vw / 2; panY = -vh / 2;
+        renderAll();
+      }
+    },
+    _reset() {
+      cam.zoom = 1;
+      pen.down = false; pen.color = '#000'; pen.size = 2; pen.x = 0; pen.y = 0;
+      alpha = 1;
+    }
+  };
+})();
+
+// ---------- Run / Stop / Resize ----------
+const logEl = document.getElementById('log');
+function log(msg, kind) {
+  logEl.textContent = msg;
+  logEl.className = kind || '';
+}
+
+const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
+// Look for common freeze patterns: an infinite loop with no `await` inside (= no wait/tick)
+function detectFreezeRisks(code) {
+  const risks = [];
+  const lines = code.split('\n');
+  // Find each "while" / "for" loop start and check its body for any "await"
+  // Simple heuristic — count braces from the loop's opening `{`
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = line.match(/\b(while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))\s*\{/);
+    if (!m) continue;
+    // Walk forward, tracking braces, looking for await before depth returns to 0
+    let depth = 1, hasAwait = false;
+    for (let j = i + 1; j < lines.length && depth > 0; j++) {
+      const l = lines[j];
+      // Count braces (ignoring those in strings is overkill; close enough)
+      for (const ch of l) {
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) break; }
+      }
+      if (/\bawait\b/.test(l) && depth > 0) hasAwait = true;
+    }
+    if (!hasAwait) {
+      risks.push(`A "forever" / "while true" loop has no "wait" block inside.\nThis will freeze the page.\n(Add "wait 0.02 seconds" from Control at the bottom of the loop.)`);
+    }
+  }
+  return risks;
+}
+
+document.getElementById('runBtn').onclick = async () => {
+  try {
+    const code = Blockly.JavaScript.workspaceToCode(workspace);
+    if (!code.trim()) { log('nothing to run — drag some blocks in!', 'err'); return; }
+    const risks = detectFreezeRisks(code);
+    if (risks.length) {
+      const msg = '⚠ Freeze risk detected:\n\n' + risks.join('\n\n') + '\n\nRun anyway?';
+      if (!confirm(msg)) { log('cancelled by freeze check', 'err'); return; }
+    }
+    currentRunId++;
+    keyState.clear();
+    namedHandlers.clear();
+    _keyDebugged = false;
+    log('running…');
+    // Inject a periodic snapshot of local vars into Stage._userVars
+    Stage._userVars = Stage._userVars || {};
+    // Extract `var x, y, z;` from generated code (Blockly emits this at top)
+    const varMatch = code.match(/^var\s+([^;]+);/);
+    let snapshotCode = '';
+    if (varMatch) {
+      const names = varMatch[1].split(',').map(n => n.trim()).filter(Boolean);
+      const setters = names.map(n => `try{Stage._userVars[${JSON.stringify(n)}]=${n};}catch(e){}`).join('');
+      // Inject a setInterval at the top that publishes vars 10x/sec
+      snapshotCode = `setInterval(()=>{${setters}}, 100);`;
+    }
+    await new AsyncFunction('Stage', snapshotCode + code)(Stage);
+    log('✓ done', 'ok');
+  } catch (e) {
+    if (e && e.message === '__STOPPED__') log('■ stopped');
+    else { log('✗ ' + (e && e.message), 'err'); console.error(e); }
+  }
+};
+
+document.getElementById('stopBtn').onclick = () => {
+  currentRunId++;
+  log('■ stop signal sent');
+};
+
+document.getElementById('centerBtn').onclick = () => {
+  Stage._center();
+};
+
+function unstickGesture() {
+  try {
+    // Blockly v10 keeps active gesture on the touch handler / workspace
+    if (Blockly.Touch && typeof Blockly.Touch.clearTouchIdentifier === 'function') {
+      Blockly.Touch.clearTouchIdentifier();
+    }
+    const cur = workspace.currentGesture_;
+    if (cur && typeof cur.cancel === 'function') cur.cancel();
+    workspace.currentGesture_ = null;
+    log('🪄 unstuck');
+  } catch (e) {
+    log('unstick failed: ' + e.message, 'err');
+  }
+}
+document.getElementById('unstickBtn').onclick = unstickGesture;
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') unstickGesture();
+}, true);
+
+document.getElementById('saveBtn').onclick = () => {
+  try {
+    const state = Blockly.serialization.workspaces.save(workspace);
+    const payload = { _kind: 'stage-project', _version: 1, savedAt: new Date().toISOString(), workspace: state, lists: Stage._dumpLists() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.download = `stage-project-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    log(`✓ saved ${a.download}`, 'ok');
+  } catch (e) {
+    log('save failed: ' + e.message, 'err');
+  }
+};
+
+document.getElementById('loadBtn').onclick = () => {
+  document.getElementById('loadInput').click();
+};
+
+document.getElementById('loadInput').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data || data._kind !== 'stage-project' || !data.workspace) {
+      throw new Error('not a valid stage project file');
+    }
+    Blockly.serialization.workspaces.load(data.workspace, workspace);
+          Stage._loadLists(data.lists || {});
+    log(`✓ loaded ${file.name}`, 'ok');
+  } catch (err) {
+    log('load failed: ' + err.message, 'err');
+  } finally {
+    e.target.value = ''; // allow re-loading the same file
+  }
+};
+
+document.getElementById('trashBtn').onclick = () => {
+  let tc = null;
+  try { tc = workspace.getTrashcan ? workspace.getTrashcan() : null; } catch {}
+  if (!tc) tc = workspace.trashcan;
+  if (!tc) { log('trash: no trashcan on workspace', 'err'); return; }
+
+  try {
+    const isOpen = (typeof tc.contentsIsOpen === 'function' && tc.contentsIsOpen())
+                || (typeof tc.isOpen === 'function' && tc.isOpen())
+                || (tc.flyout && tc.flyout.isVisible && tc.flyout.isVisible());
+    if (isOpen) {
+      if (typeof tc.closeFlyout === 'function') { tc.closeFlyout(); log('trash closed'); return; }
+    }
+    // Open it — try several method names that exist across Blockly versions
+    if (typeof tc.openFlyout === 'function') { tc.openFlyout(); log('trash opened'); return; }
+    if (typeof tc.click === 'function') { tc.click(); log('trash toggled'); return; }
+    log('trash: API not recognized (Blockly version mismatch)', 'err');
+  } catch (e) {
+    log('trash error: ' + e.message, 'err');
+  }
+};
+
+document.getElementById('modeBtn').onclick = () => {
+  const app = document.getElementById('app');
+  const modes = ['mode-split', 'mode-max', 'mode-hidden'];
+  const labels = { 'mode-split': '▦ split', 'mode-max': '⛶ max', 'mode-hidden': '◧ hidden' };
+  const cur = modes.find(m => app.classList.contains(m)) || 'mode-split';
+  const next = modes[(modes.indexOf(cur) + 1) % modes.length];
+  app.classList.remove(...modes);
+  app.classList.add(next);
+  document.getElementById('modeBtn').textContent = labels[next];
+  // Resize Blockly and Stage after layout change
+  requestAnimationFrame(() => {
+    Blockly.svgResize(workspace);
+  });
+};
+
+// Auto-fit stage to its panel
+(() => {
+  const wrap = document.getElementById('stageWrap');
+  const ro = new ResizeObserver(entries => {
+    for (const e of entries) {
+      const w = Math.max(50, Math.floor(e.contentRect.width));
+      const h = Math.max(50, Math.floor(e.contentRect.height));
+      Stage._setSize(w, h);
+      Stage._recenterIfEmpty();
+    }
+  });
+  ro.observe(wrap);
+})();
+
+window.addEventListener('resize', () => Blockly.svgResize(workspace));
+
+// ---------- Termux multi-project backup ----------
+let currentProject = null;
+(() => {
+  const BACKUP_URL = ''; // same-origin (served by stage-server.py)
+  const SAVE_INTERVAL_MS = 60 * 1000;
+  const statusEl = document.getElementById('backupStatus');
+  const picker = document.getElementById('projectPicker');
+  let lastSerialized = '';
+  let serverAlive = false;
+
+  function setStatus(text, ok) {
+    statusEl.textContent = text;
+    statusEl.style.color = ok ? '#2e7d32' : 'var(--muted)';
+  }
+
+  async function ping() {
+    try {
+      const r = await fetch('/ping');
+      serverAlive = r.ok;
+    } catch { serverAlive = false; }
+    if (!serverAlive) setStatus('⚫ server off', false);
+    else if (!currentProject) setStatus('🟢 server on (pick a project)', true);
+    else setStatus(`🟢 ${currentProject}`, true);
+  }
+
+  async function refreshProjects(selectName) {
+    try {
+      const r = await fetch('/projects');
+      const data = await r.json();
+      const projects = data.projects || [];
+      picker.innerHTML = '<option value="">— pick a project —</option>' +
+        projects.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+      if (selectName) picker.value = selectName;
+    } catch (e) { /* server might be down */ }
+  }
+
+  async function loadProject(name) {
+    if (!name) {
+      currentProject = null;
+      lastSerialized = '';
+      workspace.clear();
+      localStorage.removeItem('stage_currentProject');
+      setStatus('🟢 server on (pick a project)', true);
+      return;
+    }
+    try {
+      const r = await fetch(`/project/${encodeURIComponent(name)}/load`);
+      if (r.status === 204) {
+        workspace.clear();
+      } else if (r.ok) {
+        const data = await r.json();
+        if (data && data.workspace) {
+          Blockly.serialization.workspaces.load(data.workspace, workspace);
+          Stage._loadLists(data.lists || {});
+        } else {
+          workspace.clear();
+        }
+      } else {
+        log(`failed to load "${name}"`, 'err'); return;
+      }
+      currentProject = name;
+      lastSerialized = '';
+      localStorage.setItem('stage_currentProject', name);
+      log(`✓ loaded project "${name}"`, 'ok');
+      setStatus(`🟢 ${name}`, true);
+    } catch (e) {
+      log('load failed: ' + e.message, 'err');
+    }
+  }
+
+  picker.addEventListener('change', () => loadProject(picker.value));
+
+  document.getElementById('projectNewBtn').onclick = async () => {
+    const name = prompt('New project name (letters, numbers, spaces, _-., max 64 chars):');
+    if (!name) return;
+    try {
+      const r = await fetch('/project/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() })
+      });
+      const data = await r.json();
+      if (!r.ok) { log('new project: ' + (data.error || 'failed'), 'err'); return; }
+      await refreshProjects(data.project);
+      await loadProject(data.project);
+    } catch (e) { log('new failed: ' + e.message, 'err'); }
+  };
+
+  document.getElementById('projectDelBtn').onclick = async () => {
+    if (!currentProject) { log('no project selected', 'err'); return; }
+    if (!confirm(`Delete project "${currentProject}"? (Moved to trash folder, not lost forever.)`)) return;
+    try {
+      const r = await fetch('/project/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: currentProject })
+      });
+      const data = await r.json();
+      if (!r.ok) { log('delete: ' + (data.error || 'failed'), 'err'); return; }
+      const wasName = currentProject;
+      currentProject = null;
+      localStorage.removeItem('stage_currentProject');
+      workspace.clear();
+      await refreshProjects();
+      log(`🗑 deleted "${wasName}" (recoverable in ~/stage-backups/trash/)`, 'ok');
+      setStatus('🟢 server on (pick a project)', true);
+    } catch (e) { log('delete failed: ' + e.message, 'err'); }
+  };
+
+  async function autoSave() {
+    if (!serverAlive || !currentProject) return;
+    try {
+      const state = Blockly.serialization.workspaces.save(workspace);
+      const payload = { _kind: 'stage-project', _version: 1, savedAt: new Date().toISOString(), workspace: state, lists: Stage._dumpLists() };
+      const json = JSON.stringify(payload);
+      if (json === lastSerialized) return;
+      const r = await fetch(`/project/${encodeURIComponent(currentProject)}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json
+      });
+      if (r.ok) {
+        lastSerialized = json;
+        const t = new Date().toLocaleTimeString();
+        setStatus(`🟢 ${currentProject} · saved ${t}`, true);
+      }
+    } catch (e) { serverAlive = false; setStatus('⚫ server off', false); }
+  }
+
+  (async () => {
+    await ping();
+    if (!serverAlive) return;
+    await refreshProjects();
+    // Re-open last project if any
+    const last = localStorage.getItem('stage_currentProject');
+    if (last) {
+      const exists = Array.from(picker.options).some(o => o.value === last);
+      if (exists) { picker.value = last; await loadProject(last); }
+    }
+  })();
+  setInterval(ping, 15000);
+  setInterval(autoSave, SAVE_INTERVAL_MS);
+})();
+
+// ---------- On-screen D-pad ----------
+(() => {
+  const dpad = document.getElementById('dpad');
+  const toggle = document.getElementById('dpadToggle');
+  toggle.addEventListener('click', e => {
+    e.stopPropagation();
+    dpad.classList.toggle('hidden');
+  });
+  function fire(key, down) {
+    if (down) {
+      if (keyState.has(key)) return;
+      keyState.add(key);
+      _updateKeyDebug();
+      for (const h of keyHandlers.slice()) {
+        if (h.runId !== currentRunId) continue;
+        if (h.key === 'any' || h.key === key) h.fn();
+      }
+    } else {
+      keyState.delete(key);
+      _updateKeyDebug();
+    }
+  }
+  document.querySelectorAll('.dpad-btn').forEach(btn => {
+    const k = btn.dataset.key;
+    if (!k) return;
+    btn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fire(k, true); try { btn.setPointerCapture(e.pointerId); } catch {} });
+    const up = e => { fire(k, false); try { btn.releasePointerCapture(e.pointerId); } catch {} };
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('pointerleave', up);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  });
+})();
+
+// ---------- Stage pan (drag to move the viewport on the infinite canvas) ----------
+(() => {
+  const stageEl = document.getElementById('stage');
+  let dragging = false, startX = 0, startY = 0;
+  stageEl.addEventListener('pointerdown', e => {
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    stageEl.style.cursor = 'grabbing';
+    try { stageEl.setPointerCapture(e.pointerId); } catch {}
+  });
+  stageEl.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = (e.clientX - startX), dy = (e.clientY - startY);
+    startX = e.clientX; startY = e.clientY;
+    Stage._panBy(dx, dy);
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    stageEl.style.cursor = 'grab';
+    try { stageEl.releasePointerCapture(e.pointerId); } catch {}
+  }
+  stageEl.addEventListener('pointerup', endDrag);
+  stageEl.addEventListener('pointercancel', endDrag);
+  stageEl.addEventListener('pointerleave', endDrag);
+  stageEl.style.cursor = 'grab';
+  stageEl.style.touchAction = 'none';
+})();
+
+// ---------- Tape measure (press-and-hold stage to read coords) ----------
+(() => {
+  const stageEl = document.getElementById('stage');
+  const overlay = document.getElementById('tapeMeasure');
+  const marker = document.getElementById('tapeMarker');
+  let active = false;
+
+  function screenToWorld(clientX, clientY) {
+    const rect = stageEl.getBoundingClientRect();
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+    const sz = Stage._size();
+    const cam = Stage._cam ? Stage._cam() : { zoom: 1 };
+    const pan = Stage._pan ? Stage._pan() : { x: -sz.W/2, y: -sz.H/2 };
+    // Inverse of: screen = (world - pan) * zoom
+    const wx = sx / cam.zoom + pan.x;
+    const wyInternal = sy / cam.zoom + pan.y;
+    return { x: wx, y: -wyInternal, sx, sy }; // flip y to user-space (up-positive)
+  }
+
+  function update(e) {
+    const w = screenToWorld(e.clientX, e.clientY);
+    const pen = Stage._penInfo ? Stage._penInfo() : { x: 0, y: 0 };
+    const penY = -pen.y; // internal stored y is flipped; show user-space
+    overlay.style.display = 'block';
+    overlay.textContent = `tap: (${Math.round(w.x)}, ${Math.round(w.y)})    pen: (${Math.round(pen.x)}, ${Math.round(penY)})`;
+    marker.style.display = 'block';
+    marker.style.left = w.sx + 'px';
+    marker.style.top = w.sy + 'px';
+  }
+  function hide() {
+    active = false;
+    overlay.style.display = 'none';
+    marker.style.display = 'none';
+  }
+  // Long-press detection: 350ms hold without lifting
+  let holdTimer = null, startX = 0, startY = 0;
+  stageEl.addEventListener('pointerdown', e => {
+    // Don't interfere with d-pad
+    if (e.target && e.target.closest && e.target.closest('#dpad')) return;
+    startX = e.clientX; startY = e.clientY;
+    holdTimer = setTimeout(() => {
+      active = true;
+      update(e);
+    }, 350);
+  }, true);
+  stageEl.addEventListener('pointermove', e => {
+    if (!active) {
+      // If the user dragged far enough during the press, cancel hold (it's a pan)
+      if (holdTimer && (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8)) {
+        clearTimeout(holdTimer); holdTimer = null;
+      }
+      return;
+    }
+    update(e);
+  }, true);
+  function end() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    if (active) hide();
+  }
+  stageEl.addEventListener('pointerup', end);
+  stageEl.addEventListener('pointercancel', end);
+  stageEl.addEventListener('pointerleave', end);
+})();
+</script>
+</body>
+</html>
