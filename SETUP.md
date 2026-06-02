@@ -38,5 +38,4 @@ pip install -r config/pip-freeze.txt
 ## Notes
 - The Stage app is a single HTML file (`stage2.html`) + a tiny Python server.
 - Projects live in `stage-backups/projects/<name>/latest.json`.
-- Claude Code in Termux must be pinned to a pre-binary version (auto-update breaks it).
 - `/tmp` fix: `export TMPDIR=$PREFIX/tmp` in `.bashrc`.
