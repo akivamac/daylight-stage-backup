@@ -577,6 +577,18 @@
     <block type="list_length">
       <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
     </block>
+    <block type="list_draw_each">
+      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+      <value name="GAP"><shadow type="math_number"><field name="NUM">4</field></shadow></value>
+    </block>
+    <block type="list_this_item"></block>
+    <block type="list_this_index"></block>
+    <block type="list_at_item">
+      <value name="N"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+    </block>
     <block type="list_set">
       <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
       <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
@@ -649,6 +661,45 @@ Blockly.defineBlocksWithJsonArray([
     args0: [{ type: 'input_value', name: 'NAME' }],
     output: 'Number',
     colour: '#FF8C1A'
+  },
+  {
+    type: 'list_draw_each',
+    message0: 'draw each item in list %1 at x %2 y %3 size %4 %5 by %6 %7 %8',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'field_dropdown', name: 'DIR', options: [['\u2193 down','down'], ['\u2192 right','right']] },
+      { type: 'input_value', name: 'GAP', check: 'Number' },
+      { type: 'input_dummy' },
+      { type: 'input_statement', name: 'DO' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true,
+    tooltip: 'Draws every item in the list, spaced out. Blocks inside run after each item.'
+  },
+  {
+    type: 'list_this_item',
+    message0: 'this item',
+    output: null,
+    colour: '#FF8C1A',
+    tooltip: 'The current item while drawing each item.'
+  },
+  {
+    type: 'list_this_index',
+    message0: 'this item number',
+    output: 'Number',
+    colour: '#FF8C1A',
+    tooltip: 'The current item number (1 = first) while drawing each item.'
+  },
+  {
+    type: 'list_at_item',
+    message0: 'at item %1',
+    args0: [{ type: 'input_value', name: 'N', check: 'Number' }],
+    output: 'Boolean',
+    colour: '#FF8C1A', inputsInline: true,
+    tooltip: 'True when drawing-each is currently on item N.'
   },
   {
     type: 'list_set',
@@ -1874,6 +1925,33 @@ JG.forBlock['list_item'] = b => {
 JG.forBlock['list_length'] = b => {
   const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
   return [`Stage._listLength(${name})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_draw_each'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  const size = JG.valueToCode(b, 'SIZE', JG.ORDER_NONE) || '15';
+  const gap = JG.valueToCode(b, 'GAP', JG.ORDER_NONE) || '4';
+  const dir = b.getFieldValue('DIR') || 'down';
+  const inner = JG.statementToCode(b, 'DO');
+  // _i is a local loop index; offset advances by (size+gap) each item.
+  // Position re-reads x/y each iteration (they may reference variables).
+  const stepAxis = (dir === 'right')
+    ? '((' + x + ') + _eachOff), (' + y + ')'
+    : '(' + x + '), ((' + y + ') + _eachOff)';
+  return `for (let _i = 1; _i <= Stage._listLength(${name}); _i++) {\n` +
+         `  Stage._eachIndex = _i;\n` +
+         `  Stage._eachItem = Stage._listItem(${name}, _i);\n` +
+         `  let _eachOff = (_i - 1) * ((${size}) + (${gap}));\n` +
+         `  Stage.text(String(Stage._eachItem), ${stepAxis}, (${size}), '#222222');\n` +
+         inner +
+         `}\n`;
+};
+JG.forBlock['list_this_item'] = () => ['Stage._eachItem', JG.ORDER_MEMBER];
+JG.forBlock['list_this_index'] = () => ['Stage._eachIndex', JG.ORDER_MEMBER];
+JG.forBlock['list_at_item'] = b => {
+  const n = JG.valueToCode(b, 'N', JG.ORDER_NONE) || '0';
+  return [`(Stage._eachIndex === (${n}))`, JG.ORDER_EQUALITY];
 };
 JG.forBlock['list_set'] = b => {
   const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
@@ -3487,6 +3565,8 @@ document.getElementById('runBtn').onclick = async () => {
     log('running…');
     // Inject a periodic snapshot of local vars into Stage._userVars
     Stage._userVars = Stage._userVars || {};
+    if (Stage._eachItem === undefined) Stage._eachItem = '';
+    if (Stage._eachIndex === undefined) Stage._eachIndex = 0;
     // Extract `var x, y, z;` from generated code (Blockly emits this at top)
     const varMatch = code.match(/^var\s+([^;]+);/);
     let snapshotCode = '';
