@@ -21,8 +21,8 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow: hidden; -webkit-text-size-adjust: 100%; }
   #app { display: flex; flex-direction: row-reverse; height: 100dvh; }
-  #blocklyArea { flex: 1.2; min-width: 280px; background: var(--panel); position: relative; }
-  #blocklyDiv { position: absolute; inset: 0; }
+  #blocklyArea { flex: 1.2; min-width: 280px; background: var(--panel); position: relative; display: flex; flex-direction: column; }
+  #blocklyDiv { position: relative; flex: 1 1 auto; min-height: 0; }
   #rightPanel { flex: 1; min-width: 320px; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); }
   header.bar {
     display: flex; align-items: center; gap: 10px;
@@ -63,17 +63,23 @@
   }
 
   /* Layout modes */
-  #app.mode-split #blocklyArea { flex: 1.2; }
-  #app.mode-split #rightPanel { flex: 1; }
-  #app.mode-max #blocklyArea { flex: 0 0 0; min-width: 0; display: none; }
-  #app.mode-max #rightPanel { flex: 1; }
-  #app.mode-hidden #blocklyArea { flex: 1; }
-  #app.mode-hidden #rightPanel { flex: 0 0 56px; min-width: 56px; }
-  #app.mode-hidden #stageWrap, #app.mode-hidden #log { position: absolute !important; bottom: 0; left: 0; right: 0; z-index: 200; opacity: 0.92; display: none; }
-  #app.mode-hidden header.bar .title,
-  #app.mode-hidden header.bar .run,
-  #app.mode-hidden header.bar .stop { display: none; }
-  #app.mode-hidden header.bar { padding: 10px 6px; flex-direction: column; }
+  /* __layout2 split system: --splitPct = blocks width % when split */
+  #app { --splitPct: 55%; }
+  #app.mode-split #blocklyArea { flex: 0 0 var(--splitPct); min-width: 0; }
+  #app.mode-split #rightPanel { flex: 1 1 auto; min-width: 0; }
+  #app.mode-split #divider { display: block; }
+  #app.mode-full #blocklyArea { flex: 0 0 0; min-width: 0; display: none; }
+  #app.mode-full #divider { display: none; }
+  #app.mode-full #rightPanel { flex: 1 1 auto; }
+  #app.mode-closed #blocklyArea { flex: 1 1 auto; }
+  #app.mode-closed #divider { display: none; }
+  #app.mode-closed #rightPanel { flex: 0 0 0; min-width: 0; display: none; }
+  #divider { display: none; flex: 0 0 14px; cursor: col-resize; touch-action: none; background: #cfc8b8;
+             border-left: 1px solid #b8b0a0; border-right: 1px solid #b8b0a0; }
+  #divider:hover { background: #b0a890; }
+  #stageCloseBtn { position: absolute; bottom: 10px; left: 10px; z-index: 50;
+                   background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #555;
+                   border-radius: 7px; padding: 5px 9px; font-size: 15px; cursor: pointer; }
   #stage canvas { position: absolute; top: 0; left: 0; display: block; }
   #layerSPRITES { pointer-events: none; }
 
@@ -114,6 +120,7 @@
     border: none; border-radius: 10px;
     font-size: 20px; cursor: pointer;
   }
+  #softKbBtn { bottom: -56px; }
   /* Bigger touch targets for the toolbox */
   .blocklyToolboxCategory { padding: 4px 0 !important; }
   .blocklyTreeRow {
@@ -182,8 +189,11 @@
 <body>
 <div id="app" class="mode-split">
   <div id="blocklyArea">
-    <div id="blocklyDiv"></div>
+    <div id="tabBar" style="flex:0 0 auto;display:flex;align-items:center;gap:2px;background:#ece8dc;border-bottom:1px solid #cfc8b8;padding:3px 4px;overflow-x:auto;white-space:nowrap;font-family:sans-serif;font-size:13px;"></div>
+      <div id="blocklyDiv"></div>
+      <button id="stageToggleBtn" style="position:absolute;bottom:10px;right:10px;z-index:500;background:rgba(0,0,0,0.6);color:#fff;border:1px solid #555;border-radius:7px;padding:5px 9px;font-size:15px;cursor:pointer;" title="Close / reopen the stage">⟨Ξ</button>
   </div>
+  <div id="divider"></div>
   <div id="rightPanel">
     <header class="bar">
       <div class="title">stage<span>.</span></div>
@@ -199,7 +209,7 @@
       </select>
       <button id="projectNewBtn" class="btn ghost" title="Create a new project">＋ New</button>
       <button id="projectDelBtn" class="btn ghost" title="Delete the current project (moves to trash folder)">🗑 Del</button>
-      <button id="modeBtn" class="btn ghost" title="Cycle layout: split / stage-max / stage-hidden">▦ split</button>
+      <button id="fullSplitBtn" class="btn ghost" title="Toggle full stage / split view">💢 full</button>
       <button id="centerBtn" class="btn ghost" title="Pan back to your content">⊕ Center</button>
       <button id="unstickBtn" class="btn ghost" title="Free a block stuck to your cursor (or press Esc)">🪄 Unstick</button>
     </header>
@@ -236,6 +246,8 @@
           <button class="dpad-btn" data-key="right">→</button>
           <button class="dpad-btn dpad-space" data-key="space">space</button>
           <button id="dpadToggle" class="dpad-toggle" title="Show/hide on-screen keys">⌨</button>
+          <button id="softKbBtn" class="dpad-toggle" title="Pop up keyboard to send any key">📱</button>
+          <input id="softKbInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;" />
         </div>
       </div>
     </div>
@@ -246,6 +258,7 @@
 <xml id="toolbox" style="display:none">
   <category name="Events" colour="#FFAB19">
     <block type="event_run"></block>
+    <block type="event_run_cont"></block>
   </category>
 
   <category name="Keyboard" colour="#FF6E40">
@@ -672,6 +685,13 @@ Blockly.defineBlocksWithJsonArray([
     nextStatement: null,
     colour: '#FFAB19',
     tooltip: 'Everything below runs when you press Run'
+  },
+  {
+    type: 'event_run_cont',
+    message0: '▶ …continued',
+    nextStatement: null,
+    colour: '#FFAB19',
+    tooltip: 'Continuation of Run — blocks below run as part of Run, in order'
   },
 
   // ---- Stage ----
@@ -1415,6 +1435,31 @@ const KEY_OPTIONS = [
 ];
 for (const c of 'abcdefghijklmnopqrstuvwxyz') KEY_OPTIONS.push([c, c]);
 for (const c of '0123456789') KEY_OPTIONS.push([c, c]);
+KEY_OPTIONS.push(['ctrl','ctrl']);
+KEY_OPTIONS.push(['backspace','backspace']);
+KEY_OPTIONS.push(['delete','delete']);
+KEY_OPTIONS.push([',', ',']);
+KEY_OPTIONS.push(['.', '.']);
+KEY_OPTIONS.push(['"', '"']);
+KEY_OPTIONS.push(['(', '(']);
+KEY_OPTIONS.push([')', ')']);
+KEY_OPTIONS.push(['-', '-']);
+KEY_OPTIONS.push(['_', '_']);
+KEY_OPTIONS.push(['=', '=']);
+KEY_OPTIONS.push(['+', '+']);
+KEY_OPTIONS.push(['!', '!']);
+KEY_OPTIONS.push(['@', '@']);
+KEY_OPTIONS.push(['#', '#']);
+KEY_OPTIONS.push(['$', '$']);
+KEY_OPTIONS.push(['%', '%']);
+KEY_OPTIONS.push(['^', '^']);
+KEY_OPTIONS.push(['&', '&']);
+KEY_OPTIONS.push(['*', '*']);
+KEY_OPTIONS.push(['[', '[']);
+KEY_OPTIONS.push([']', ']']);
+KEY_OPTIONS.push(['{', '{']);
+KEY_OPTIONS.push(['}', '}']);
+
 
 Blockly.defineBlocksWithJsonArray([
   {
@@ -1456,6 +1501,7 @@ Blockly.defineBlocksWithJsonArray([
 // ---------- JS generators ----------
 const JG = Blockly.JavaScript;
 JG.forBlock['event_run'] = () => '';
+JG.forBlock['event_run_cont'] = () => '';
 JG.forBlock['sprite_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
   return [JSON.stringify(name), JG.ORDER_ATOMIC];
@@ -1919,6 +1965,221 @@ const workspace = Blockly.inject('blocklyDiv', {
   move: { scrollbars: true, drag: true, wheel: false }
 });
 
+// __columnTabs -------------------------------------------------------------
+// Tabs are bookmarks to COLUMNS of one shared workspace.
+const COL_GAP = 250;          // gap (workspace px) between a column's right edge and next column
+const COL_MIN_SPACING = 600;  // minimum spacing so empty columns aren't on top of each other
+let _tabs = [];               // [{ id, name, x }]  x = column left position (workspace coords)
+let _activeTab = 0;
+let _tabSeq = 1;
+function _newTabId(){ return 't' + (_tabSeq++); }
+
+function _scrollToX(x) {
+  try {
+    const scale = workspace.scale || 1;
+    let tbW = 0;
+    try { tbW = workspace.getMetricsManager().getToolboxMetrics().width || 0; } catch(e){}
+    // place column x just right of the toolbox
+    const targetX = -(x * scale) + tbW + 24;
+    workspace.scroll(targetX, workspace.scrollY);
+  } catch(e) {}
+}
+
+// Compute the right edge (max block right) among blocks belonging to a column x.
+function _columnRightEdge(colX) {
+  let maxR = colX;
+  const tops = workspace.getTopBlocks(true);
+  for (const b of tops) {
+    const xy = b.getRelativeToSurfaceXY();
+    if (_nearestColIndexForX(xy.x) === _colIndexForX(colX)) {
+      const r = b.getBoundingRectangle();
+      if (r.right > maxR) maxR = r.right;
+    }
+  }
+  return maxR;
+}
+function _colIndexForX(x){
+  // index of the tab whose .x equals this x (or -1)
+  for (let i=0;i<_tabs.length;i++) if (Math.abs(_tabs[i].x - x) < 1) return i;
+  return -1;
+}
+function _nearestColIndexForX(blockX){
+  let best=-1, bestD=Infinity;
+  for (let i=0;i<_tabs.length;i++){
+    const d = Math.abs(_tabs[i].x - blockX);
+    if (d < bestD){ bestD=d; best=i; }
+  }
+  return best;
+}
+
+function switchTab(i) {
+  if (i < 0 || i >= _tabs.length) return;
+  _activeTab = i;
+  _scrollToX(_tabs[i].x);
+  _renderTabBar();
+}
+function addTab(name) {
+  // next column x = right edge of the last column + gap (or min spacing)
+  let nextX = 0;
+  if (_tabs.length) {
+    const lastX = _tabs[_tabs.length-1].x;
+    const edge = _columnRightEdge(lastX);
+    nextX = Math.max(edge + COL_GAP, lastX + COL_MIN_SPACING);
+  }
+  const t = { id: _newTabId(), name: name || ('Col ' + (_tabs.length + 1)), x: nextX };
+  _tabs.push(t);
+  _activeTab = _tabs.length - 1;
+  _scrollToX(nextX);
+  _renderTabBar();
+}
+function deleteTab(i) {
+  if (_tabs.length <= 1) { alert("Can't delete the last tab."); return; }
+  const delBlocks = confirm('Delete tab "' + _tabs[i].name + '".\n\nOK = also delete this column\'s blocks.\nCancel = keep blocks, just remove the tab.');
+  if (delBlocks) {
+    const colX = _tabs[i].x;
+    const tops = workspace.getTopBlocks(true);
+    for (const b of tops) {
+      const xy = b.getRelativeToSurfaceXY();
+      if (_nearestColIndexForX(xy.x) === i) {
+        try { b.dispose(true); } catch(e){}
+      }
+    }
+  }
+  _tabs.splice(i, 1);
+  if (_activeTab >= _tabs.length) _activeTab = _tabs.length - 1;
+  _renderTabBar();
+  _scrollToX(_tabs[_activeTab].x);
+}
+function renameTab(i) {
+  const nn = prompt('Rename tab:', _tabs[i].name);
+  if (nn && nn.trim()) { _tabs[i].name = nn.trim(); _renderTabBar(); }
+}
+
+// Make right-click 'Clean up Blocks' use column cleanup (registry callback swap)
+function _installCleanupOverride() {
+  try { workspace.cleanUp = function() { cleanUpColumns(); }; } catch(e){}
+  try {
+    const reg = Blockly.ContextMenuRegistry && Blockly.ContextMenuRegistry.registry;
+    if (reg && reg.getItem) {
+      const item = reg.getItem('cleanWorkspace');
+      if (item) { item.callback = function(scope){ cleanUpColumns(); }; }
+    }
+  } catch(e) {}
+}
+// Column-aware cleanup: snap each top block to its nearest column, stack vertically,
+// then re-flow columns left->right so they don't overlap.
+function cleanUpColumns() {
+  const Coordinate = Blockly.utils.Coordinate;
+  const tops = workspace.getTopBlocks(true);
+  // bucket blocks by nearest column
+  const buckets = _tabs.map(() => []);
+  for (const b of tops) {
+    const xy = b.getRelativeToSurfaceXY();
+    const idx = _nearestColIndexForX(xy.x);
+    if (idx >= 0) buckets[idx].push(b);
+  }
+  // first pass: stack each bucket at its column's current x, measure widths
+  const PAD_Y = 30, START_Y = 0;
+  let widths = [];
+  for (let i=0;i<_tabs.length;i++){
+    let y = START_Y, maxW = 0;
+    for (const b of buckets[i]) {
+      b.moveTo(new Coordinate(_tabs[i].x, y));
+      const r = b.getBoundingRectangle();
+      const h = r.bottom - r.top;
+      const w = r.right - r.left;
+      if (w > maxW) maxW = w;
+      y += h + PAD_Y;
+    }
+    widths[i] = maxW;
+  }
+  // second pass: re-flow column x positions left->right based on widths
+  let curX = 0;
+  for (let i=0;i<_tabs.length;i++){
+    _tabs[i].x = curX;
+    // move this bucket to the new x
+    let y = START_Y;
+    for (const b of buckets[i]) {
+      b.moveTo(new Coordinate(curX, y));
+      const r = b.getBoundingRectangle();
+      y += (r.bottom - r.top) + PAD_Y;
+    }
+    curX = curX + Math.max(widths[i], COL_MIN_SPACING - COL_GAP) + COL_GAP;
+  }
+  _renderTabBar();
+  _scrollToX(_tabs[_activeTab].x);
+}
+
+let _dragTabIndex = null;
+function _renderTabBar() {
+  const bar = document.getElementById('tabBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  _tabs.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.textContent = t.name;
+    el.draggable = true;
+    el.style.cssText =
+      'padding:4px 10px;border-radius:7px 7px 0 0;cursor:pointer;user-select:none;' +
+      'border:1px solid #cfc8b8;border-bottom:none;' +
+      (i === _activeTab ? 'background:#fff;font-weight:bold;' : 'background:#ddd6c6;color:#555;');
+    el.onclick = () => switchTab(i);
+    el.ondblclick = (e) => { e.stopPropagation(); renameTab(i); };
+    el.oncontextmenu = (e) => { e.preventDefault(); deleteTab(i); };
+    el.ondragstart = () => { _dragTabIndex = i; };
+    el.ondragover = (e) => { e.preventDefault(); };
+    el.ondrop = (e) => {
+      e.preventDefault();
+      if (_dragTabIndex === null || _dragTabIndex === i) return;
+      const moved = _tabs.splice(_dragTabIndex, 1)[0];
+      _tabs.splice(i, 0, moved);
+      _activeTab = _tabs.indexOf(moved);
+      _dragTabIndex = null;
+      _renderTabBar();
+    };
+    bar.appendChild(el);
+  });
+  // + add column
+  const plus = document.createElement('div');
+  plus.textContent = '+';
+  plus.title = 'Add a column tab';
+  plus.style.cssText = 'padding:4px 12px;cursor:pointer;font-weight:bold;color:#333;user-select:none;';
+  plus.onclick = () => addTab();
+  bar.appendChild(plus);
+  // cleanup button
+  const clean = document.createElement('div');
+  clean.textContent = '🧹';
+  clean.title = 'Clean up: organize each column';
+  clean.style.cssText = 'padding:4px 10px;cursor:pointer;user-select:none;';
+  clean.onclick = () => cleanUpColumns();
+  bar.appendChild(clean);
+}
+
+// Save/load tab bookmarks
+function _dumpTabs() { return { columnTabs: true, tabs: _tabs, active: _activeTab, seq: _tabSeq }; }
+function _loadTabs(saved) {
+  if (saved && saved.columnTabs && Array.isArray(saved.tabs) && saved.tabs.length) {
+    _tabs = saved.tabs.map(t => ({ id: t.id || _newTabId(), name: t.name || 'Col', x: t.x || 0 }));
+    _activeTab = saved.active || 0;
+    _tabSeq = saved.seq || (_tabs.length + 1);
+  } else {
+    _tabs = [{ id: _newTabId(), name: 'Main', x: 0 }];
+    _activeTab = 0;
+  }
+  if (_activeTab >= _tabs.length) _activeTab = 0;
+  _renderTabBar();
+  setTimeout(() => { try { workspace.resize(); } catch(e){} _scrollToX(_tabs[_activeTab].x); }, 60);
+}
+
+// init: single Main tab at x0
+_tabs = [{ id: _newTabId(), name: 'Main', x: 0 }];
+_activeTab = 0;
+_renderTabBar();
+_installCleanupOverride();
+// __columnTabs end ---------------------------------------------------------
+
+
+
 // Force inline editing for number/text fields on tablet (Blockly defaults to a popup on mobile)
 Blockly.FieldTextInput.prototype.showEditor_ = function (_e, quietInput) {
   this.workspace_ = this.sourceBlock_.workspace;
@@ -1985,6 +2246,9 @@ function normKey(k, code) {
   if (k === 'ArrowLeft' || code === 'ArrowLeft') return 'left';
   if (k === 'ArrowRight' || code === 'ArrowRight') return 'right';
   if (k === 'Enter' || code === 'Enter' || code === 'NumpadEnter') return 'enter';
+  if (k === 'Backspace' || code === 'Backspace') return 'backspace';
+  if (k === 'Delete' || code === 'Delete') return 'delete';
+  if (k === 'Control' || code === 'ControlLeft' || code === 'ControlRight') return 'ctrl';
   // Letter keys via code (works even when e.key gives weird IME results)
   if (code && code.startsWith('Key')) return code.slice(3).toLowerCase();
   if (code && code.startsWith('Digit')) return code.slice(5);
@@ -1999,7 +2263,9 @@ document.addEventListener('keydown', e => {
     _keyDebugged = true;
     try { document.getElementById('log').textContent = `key event: "${e.key}" → "${k}" (handlers: ${keyHandlers.filter(h=>h.runId===currentRunId).length})`; } catch {}
   }
-  if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault(); if (keyState.has(k)) return;
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault();
+  if (k === 'backspace' || k === 'delete') e.preventDefault();
+  if (keyState.has(k)) return;
   keyState.add(k);
   _updateKeyDebug();
   for (const h of keyHandlers.slice()) {
@@ -3262,6 +3528,24 @@ function unstickGesture() {
   }
 }
 document.getElementById('unstickBtn').onclick = unstickGesture;
+
+// __autoUnstick: if a gesture is still alive shortly after the finger lifts, it's stuck.
+(function(){
+  function checkStuck() {
+    setTimeout(function(){
+      try {
+        if (workspace && workspace.currentGesture_) {
+          // Still dragging with no finger down -> stuck. Clear it.
+          unstickGesture();
+        }
+      } catch (e) {}
+    }, 150);
+  }
+  window.addEventListener('pointerup', checkStuck, true);
+  window.addEventListener('touchend', checkStuck, true);
+  window.addEventListener('pointercancel', checkStuck, true);
+})();
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') unstickGesture();
 }, true);
@@ -3269,7 +3553,7 @@ document.addEventListener('keydown', e => {
 document.getElementById('saveBtn').onclick = () => {
   try {
     const state = Blockly.serialization.workspaces.save(workspace);
-    const payload = { _kind: 'stage-project', _version: 1, savedAt: new Date().toISOString(), workspace: state, lists: Stage._dumpLists() };
+    const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3331,20 +3615,82 @@ document.getElementById('trashBtn').onclick = () => {
   }
 };
 
-document.getElementById('modeBtn').onclick = () => {
+// __layout2 -----------------------------------------------------------------
+let _layoutMode = 'split';
+let _splitPct = 55;
+function _applyLayout() {
   const app = document.getElementById('app');
-  const modes = ['mode-split', 'mode-max', 'mode-hidden'];
-  const labels = { 'mode-split': '▦ split', 'mode-max': '⛶ max', 'mode-hidden': '◧ hidden' };
-  const cur = modes.find(m => app.classList.contains(m)) || 'mode-split';
-  const next = modes[(modes.indexOf(cur) + 1) % modes.length];
-  app.classList.remove(...modes);
-  app.classList.add(next);
-  document.getElementById('modeBtn').textContent = labels[next];
-  // Resize Blockly and Stage after layout change
-  requestAnimationFrame(() => {
-    Blockly.svgResize(workspace);
-  });
+  app.classList.remove('mode-split', 'mode-full', 'mode-closed', 'mode-max', 'mode-hidden');
+  app.classList.add('mode-' + _layoutMode);
+  app.style.setProperty('--splitPct', _splitPct + '%');
+  const fb = document.getElementById('fullSplitBtn');
+  if (fb) fb.textContent = (_layoutMode === 'full') ? 'split' : '💢 full';
+  const tb = document.getElementById('stageToggleBtn');
+  if (tb) tb.textContent = (_layoutMode === 'closed') ? 'Ξ⟩' : '⟨Ξ';
+  requestAnimationFrame(() => { try { Blockly.svgResize(workspace); } catch(e){} });
+}
+function setLayout(mode) { _layoutMode = mode; _applyLayout(); }
+
+document.getElementById('fullSplitBtn').onclick = () => {
+  setLayout(_layoutMode === 'full' ? 'split' : 'full');
 };
+document.getElementById('stageToggleBtn').onclick = () => {
+  setLayout(_layoutMode === 'closed' ? 'split' : 'closed');
+};
+
+// __dividerOverlay: drag via a full-window overlay so nothing steals events
+(function(){
+  const divider = document.getElementById('divider');
+  const app = document.getElementById('app');
+  if (!divider) return;
+  let overlay = null;
+  function applyFromX(clientX) {
+    const rect = app.getBoundingClientRect();
+    // row-reverse: blocks (#blocklyArea) are visually on the RIGHT.
+    let pct = ((rect.right - clientX) / rect.width) * 100;
+    pct = Math.max(20, Math.min(80, pct));
+    _splitPct = pct;
+    app.style.setProperty('--splitPct', pct + '%');
+  }
+  function startDrag(e) {
+    e.preventDefault();
+    overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:99999;cursor:col-resize;touch-action:none;background:transparent;';
+    document.body.appendChild(overlay);
+    const move = (ev) => {
+      const x = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+      applyFromX(x);
+    };
+    const end = () => {
+      overlay.removeEventListener('pointermove', move);
+      overlay.removeEventListener('pointerup', end);
+      overlay.removeEventListener('touchmove', move);
+      overlay.removeEventListener('touchend', end);
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      overlay = null;
+      requestAnimationFrame(() => { try { Blockly.svgResize(workspace); } catch(_){} });
+    };
+    overlay.addEventListener('pointermove', move);
+    overlay.addEventListener('pointerup', end);
+    overlay.addEventListener('touchmove', move, { passive: false });
+    overlay.addEventListener('touchend', end);
+  }
+  divider.addEventListener('pointerdown', startDrag);
+})();
+
+function _dumpLayout() { return { mode: _layoutMode, splitPct: _splitPct }; }
+function _loadLayout(L) {
+  if (L && typeof L === 'object') {
+    _layoutMode = L.mode || 'split';
+    _splitPct = (typeof L.splitPct === 'number') ? L.splitPct : 55;
+  } else {
+    _layoutMode = 'split'; _splitPct = 55;
+  }
+  _applyLayout();
+}
+_applyLayout();
+// __layout2 end -------------------------------------------------------------
 
 // Auto-fit stage to its panel
 (() => {
@@ -3413,11 +3759,18 @@ let currentProject = null;
         workspace.clear();
       } else if (r.ok) {
         const data = await r.json();
-        if (data && data.workspace) {
-          Blockly.serialization.workspaces.load(data.workspace, workspace);
+        if (data && data.tabsData) {
+          if (data.workspace) { try { Blockly.serialization.workspaces.load(data.workspace, workspace); } catch(e){} }
+          _loadTabs(data.tabsData);
+          _loadLayout(data.layout);
+          Stage._loadLists(data.lists || {});
+        } else if (data && data.workspace) {
+          // legacy single-workspace project -> load blocks, single Main tab
+          try { Blockly.serialization.workspaces.load(data.workspace, workspace); } catch(e){}
+          _loadTabs(null);
           Stage._loadLists(data.lists || {});
         } else {
-          workspace.clear();
+          _loadTabs(null);
         }
       } else {
         log(`failed to load "${name}"`, 'err'); return;
@@ -3475,7 +3828,7 @@ let currentProject = null;
     if (!serverAlive || !currentProject) return;
     try {
       const state = Blockly.serialization.workspaces.save(workspace);
-      const payload = { _kind: 'stage-project', _version: 1, savedAt: new Date().toISOString(), workspace: state, lists: Stage._dumpLists() };
+      const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists() };
       const json = JSON.stringify(payload);
       if (json === lastSerialized) return;
       const r = await fetch(`/project/${encodeURIComponent(currentProject)}/save`, {
@@ -3538,6 +3891,52 @@ let currentProject = null;
     btn.addEventListener('pointerleave', up);
     btn.addEventListener('contextmenu', e => e.preventDefault());
   });
+
+  // __softKeys: summon device keyboard, route keys into the same fire() system
+  const softBtn = document.getElementById('softKbBtn');
+  const softInput = document.getElementById('softKbInput');
+  if (softBtn && softInput) {
+    // __softKeysFix: Gboard gives no usable keydown; read typed char from input event.
+    softBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      softInput.value = ' ';        // a space so Backspace produces a deleteContent event
+      softInput.focus();
+      try { softInput.setSelectionRange(1,1); } catch(_){}
+    });
+    function tapKey(k) {
+      if (!k) return;
+      fire(k, true);
+      // soft keyboards can't hold; release shortly after so 'is key down' pulses
+      setTimeout(() => fire(k, false), 120);
+    }
+    // Most character keys arrive here as e.data (e.g. 'j', 'L', '(', '5')
+    softInput.addEventListener('input', (e) => {
+      const ch = (e.data != null) ? e.data : '';
+      if (ch && ch.length === 1) {
+        tapKey(ch.toLowerCase());
+      }
+      // keep a single space buffer so Backspace keeps firing deleteContent
+      softInput.value = ' ';
+      try { softInput.setSelectionRange(1,1); } catch(_){}
+    });
+    // Backspace / Enter don't produce e.data; catch via beforeinput inputType
+    softInput.addEventListener('beforeinput', (e) => {
+      if (e.inputType === 'deleteContentBackward') tapKey('backspace');
+      else if (e.inputType === 'insertLineBreak') tapKey('enter');
+    });
+    // If a hardware keyboard IS attached, keydown still works — support both.
+    softInput.addEventListener('keydown', (e) => {
+      const k = normKey(e.key, e.code);
+      if (k === 'unidentified') return; // ignore Gboard's blank keydown
+      if (k === 'backspace' || k === 'delete') e.preventDefault();
+      fire(k, true);
+    });
+    softInput.addEventListener('keyup', (e) => {
+      const k = normKey(e.key, e.code);
+      if (k === 'unidentified') return;
+      fire(k, false);
+    });
+  }
 })();
 
 // ---------- Stage pan (drag to move the viewport on the infinite canvas) ----------

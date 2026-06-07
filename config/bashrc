@@ -3,3 +3,4 @@ export TMPDIR=$PREFIX/tmp
 export PATH="$HOME/bin:$PATH"
 (python ~/stage-server.py &) >/dev/null 2>&1
 alias pushstage='~/backup.sh'
+source ~/version-tools.sh
