@@ -568,17 +568,25 @@
     </block>
     <block type="list_add">
       <value name="ITEM"><shadow type="text"><field name="TEXT">thing</field></shadow></value>
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
     </block>
     <block type="list_item">
       <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
     </block>
     <block type="list_length">
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
+    </block>
+    <block type="list_name"></block>
+    <block type="list_copy_all">
+      <value name="FROM"><shadow type="list_name"></shadow></value>
+      <value name="TO"><shadow type="list_name"></shadow></value>
+    </block>
+    <block type="list_all_text">
+      <value name="NAME"><shadow type="list_name"></shadow></value>
     </block>
     <block type="list_draw_each">
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
       <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="SIZE"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
@@ -591,24 +599,24 @@
     </block>
     <block type="list_set">
       <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
       <value name="ITEM"><shadow type="text"><field name="TEXT">new</field></shadow></value>
     </block>
     <block type="list_delete">
       <value name="INDEX"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
     </block>
     <block type="list_clear">
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
     </block>
     <block type="list_any_sprite_near">
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
       <value name="DIST"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
       <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
     </block>
     <block type="list_closest_sprite">
-      <value name="NAME"><shadow type="text"><field name="TEXT">my list</field></shadow></value>
+      <value name="NAME"><shadow type="list_name"></shadow></value>
       <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
     </block>
@@ -661,6 +669,25 @@ Blockly.defineBlocksWithJsonArray([
     args0: [{ type: 'input_value', name: 'NAME' }],
     output: 'Number',
     colour: '#FF8C1A'
+  },
+  {
+    type: 'list_copy_all',
+    message0: 'add all items from list %1 to %2',
+    args0: [
+      { type: 'input_value', name: 'FROM' },
+      { type: 'input_value', name: 'TO' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#FF8C1A', inputsInline: true,
+    tooltip: 'Appends every item from the first list onto the end of the second list.'
+  },
+  {
+    type: 'list_all_text',
+    message0: 'all items in list %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    output: null,
+    colour: '#FF8C1A', inputsInline: true,
+    tooltip: 'All items joined by spaces (good for draw text).'
   },
   {
     type: 'list_draw_each',
@@ -1477,6 +1504,42 @@ Blockly.Blocks['sprite_name'] = {
   }
 };
 
+Blockly.Blocks['list_name'] = {
+  init: function() {
+    const self = this;
+    const dd = new Blockly.FieldDropdown(function() {
+      const names = new Set();
+      try {
+        const allBlocks = (typeof workspace !== 'undefined' && workspace) ? workspace.getAllBlocks(false) : [];
+        for (const b of allBlocks) {
+          if (b.type === 'list_create') {
+            const nameInput = b.getInput('NAME');
+            if (nameInput && nameInput.connection && nameInput.connection.targetBlock()) {
+              const tb = nameInput.connection.targetBlock();
+              if (tb.type === 'text') {
+                const v = tb.getFieldValue('TEXT');
+                if (v) names.add(v);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+      try {
+        const cur = self.getFieldValue && self.getFieldValue('NAME');
+        if (cur) names.add(cur);
+      } catch (e) {}
+      const opts = Array.from(names).map(n => [n, n]);
+      if (!opts.length) opts.push(['(no lists yet)', '']);
+      return opts;
+    });
+    dd.doClassValidation_ = function(v) { return v; };
+    this.appendDummyInput().appendField(dd, 'NAME');
+    this.setOutput(true, 'String');
+    this.setColour('#FF8C1A');
+    this.setTooltip('Pick a list name. Refreshes from your create-list blocks.');
+  }
+};
+
 
 // ---- Keyboard (built with a key dropdown shared between two blocks) ----
 const KEY_OPTIONS = [
@@ -1554,6 +1617,10 @@ const JG = Blockly.JavaScript;
 JG.forBlock['event_run'] = () => '';
 JG.forBlock['event_run_cont'] = () => '';
 JG.forBlock['sprite_name'] = b => {
+  const name = b.getFieldValue('NAME') || '';
+  return [JSON.stringify(name), JG.ORDER_ATOMIC];
+};
+JG.forBlock['list_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
   return [JSON.stringify(name), JG.ORDER_ATOMIC];
 };
@@ -1925,6 +1992,15 @@ JG.forBlock['list_item'] = b => {
 JG.forBlock['list_length'] = b => {
   const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
   return [`Stage._listLength(${name})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['list_copy_all'] = b => {
+  const from = JG.valueToCode(b, 'FROM', JG.ORDER_NONE) || "''";
+  const to = JG.valueToCode(b, 'TO', JG.ORDER_NONE) || "''";
+  return `Stage._listCopyAll(${from}, ${to});\n`;
+};
+JG.forBlock['list_all_text'] = b => {
+  const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
+  return [`Stage._listAllText(${name})`, JG.ORDER_FUNCTION_CALL];
 };
 JG.forBlock['list_draw_each'] = b => {
   const name = JG.valueToCode(b, 'NAME', JG.ORDER_NONE) || "''";
@@ -3445,6 +3521,15 @@ const Stage = (() => {
       if (i >= 0 && i < arr.length) arr.splice(i, 1);
     },
     _listClear(name) { lists[String(name)] = []; },
+    _listCopyAll(from, to) {
+      const a = lists[String(from)]; if (!a) return;
+      const k = String(to); if (!lists[k]) lists[k] = [];
+      for (const it of a) lists[k].push(it);
+    },
+    _listAllText(name) {
+      const arr = lists[String(name)]; if (!arr) return '';
+      return arr.map(x => String(x)).join(' ');
+    },
     _listAnySpriteNear(listName, dist, x, y) {
       const arr = lists[String(listName)]; if (!arr) return false;
       const d2 = Number(dist) * Number(dist);
