@@ -2059,24 +2059,43 @@ JG.forBlock['list_clear'] = b => {
 };
 
 // Async My Blocks (custom procedures)
+function _procParams(b) {
+  // Parameter variable names for this procedure definition
+  const vars = b.getVars ? b.getVars() : [];
+  return vars.map(v => JG.nameDB_.getName(v, Blockly.Names.NameType.VARIABLE));
+}
+function _callArgs(b) {
+  // Values plugged into a call block's ARG0, ARG1, ... sockets
+  const args = [];
+  let i = 0;
+  while (b.getInput('ARG' + i)) {
+    args.push(JG.valueToCode(b, 'ARG' + i, JG.ORDER_NONE) || '0');
+    i++;
+  }
+  return args;
+}
 JG.forBlock['procedures_defnoreturn'] = function(b) {
   const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  const params = _procParams(b).join(', ');
   const branch = JG.statementToCode(b, 'STACK');
-  return 'async function ' + name + '() {\n' + branch + '}\n';
+  return 'async function ' + name + '(' + params + ') {\n' + branch + '}\n';
 };
 JG.forBlock['procedures_callnoreturn'] = function(b) {
   const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
-  return 'await ' + name + '();\n';
+  const args = _callArgs(b).join(', ');
+  return 'await ' + name + '(' + args + ');\n';
 };
 JG.forBlock['procedures_defreturn'] = function(b) {
   const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
+  const params = _procParams(b).join(', ');
   const branch = JG.statementToCode(b, 'STACK');
   const ret = JG.valueToCode(b, 'RETURN', JG.ORDER_NONE) || '';
-  return 'async function ' + name + '() {\n' + branch + '  return ' + ret + ';\n}\n';
+  return 'async function ' + name + '(' + params + ') {\n' + branch + '  return ' + ret + ';\n}\n';
 };
 JG.forBlock['procedures_callreturn'] = function(b) {
   const name = JG.nameDB_.getName(b.getFieldValue('NAME'), Blockly.Names.NameType.PROCEDURE);
-  return ['(await ' + name + '())', JG.ORDER_FUNCTION_CALL];
+  const args = _callArgs(b).join(', ');
+  return ['(await ' + name + '(' + args + '))', JG.ORDER_FUNCTION_CALL];
 };
 // Keyboard
 JG.forBlock['event_key_pressed'] = b => {
@@ -2118,6 +2137,7 @@ const workspace = Blockly.inject('blocklyDiv', {
   trashcan: true,
   move: { scrollbars: true, drag: true, wheel: false }
 });
+
 
 // __columnTabs -------------------------------------------------------------
 // Tabs are bookmarks to COLUMNS of one shared workspace.
@@ -2371,11 +2391,18 @@ Blockly.FieldTextInput.prototype.showEditor_ = function (_e, quietInput) {
     box.appendChild(row);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
-    if (input) { setTimeout(() => { input.focus(); input.select(); }, 50); }
-    function close(val) { document.body.removeChild(overlay); callback(val); }
+    // Ignore backdrop dismissal for a moment so the opening tap doesn't bleed through and close it
+    const _openedAt = Date.now();
+    // Stop touches inside the box from bubbling out
+    box.addEventListener('pointerdown', e => e.stopPropagation());
+    box.addEventListener('click', e => e.stopPropagation());
+    if (input) { setTimeout(() => { input.focus(); input.select(); }, 80); }
+    function close(val) { if (overlay.parentNode) document.body.removeChild(overlay); callback(val); }
     cancel.onclick = () => close(isConfirm ? false : null);
     ok.onclick = () => close(isConfirm ? true : (input ? input.value : ''));
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(isConfirm ? false : null); });
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay && (Date.now() - _openedAt) > 400) close(isConfirm ? false : null);
+    });
     if (input) input.addEventListener('keydown', e => {
       if (e.key === 'Enter') close(input.value);
       if (e.key === 'Escape') close(null);
