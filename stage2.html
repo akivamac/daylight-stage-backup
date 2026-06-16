@@ -184,6 +184,8 @@
   /* Blockly tweaks for tablet touch */
   .blocklyToolboxDiv { background: var(--panel-2) !important; border-right: 1px solid var(--line) !important; }
   .blocklyTreeRow { padding: 6px 8px !important; }
+  .fileMenuItem { display:block; width:100%; text-align:left; padding:10px 12px; border:none; background:#fff; font-size:14px; border-radius:7px; cursor:pointer; }
+  .fileMenuItem:hover { background:#f0ece0; }
 </style>
 </head>
 <body>
@@ -196,22 +198,39 @@
   <div id="divider"></div>
   <div id="rightPanel">
     <header class="bar">
+      <!-- __headerRedesign -->
       <div class="title">stage<span>.</span></div>
       <button id="runBtn" class="btn run">▶ Run</button>
       <button id="stopBtn" class="btn stop">■ Stop</button>
-      <button onclick="document.getElementById(String.fromCharCode(108,111,103)).textContent=Blockly.JavaScript.workspaceToCode(workspace)">📜</button><button id="trashBtn" class="btn ghost" title="Open trash (deleted blocks)">🗑</button>
-      <button id="saveBtn" class="btn ghost" title="Download your project as a file">💾 Save</button>
-      <button id="loadBtn" class="btn ghost" title="Load a project file">📂 Load</button>
+
+      <!-- File dropdown -->
+      <div id="fileMenuWrap" style="position:relative;display:inline-block;">
+        <button id="fileMenuBtn" class="btn ghost" title="File actions">📁 File ▾</button>
+        <div id="fileMenu" style="display:none;position:absolute;top:100%;left:0;z-index:1000;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,0.18);min-width:180px;padding:6px;flex-direction:column;gap:2px;">
+          <button id="saveNowBtn" class="fileMenuItem">💾 Save now</button>
+          <button id="saveBtn" class="fileMenuItem">⬇ Backup (download)</button>
+          <button id="loadBtn" class="fileMenuItem">📂 Load file</button>
+          <div style="height:1px;background:var(--line);margin:4px 0;"></div>
+          <button id="projectNewBtn" class="fileMenuItem">＋ New project</button>
+          <button id="projectRenameBtn" class="fileMenuItem">✏ Rename project</button>
+          <button id="projectDelBtn" class="fileMenuItem">🗑 Delete project</button>
+        </div>
+      </div>
       <input type="file" id="loadInput" accept=".json,application/json" style="display:none">
-      <span id="backupStatus" title="Termux backup server status" style="font-size:12px;color:var(--muted);margin:0 8px;">⚫ backup off</span>
+
+      <!-- Projects dropdown (separate) -->
       <select id="projectPicker" title="Switch project" style="padding:8px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:600;min-height:40px;">
         <option value="">— pick a project —</option>
       </select>
-      <button id="projectNewBtn" class="btn ghost" title="Create a new project">＋ New</button>
-      <button id="projectDelBtn" class="btn ghost" title="Delete the current project (moves to trash folder)">🗑 Del</button>
+
+      <button id="copyCodeBtn" class="btn ghost" title="Copy the generated code to clipboard">📋 Copy code</button>
+      <button id="trashBtn" class="btn ghost" title="Open trash (deleted blocks)">🗑</button>
       <button id="fullSplitBtn" class="btn ghost" title="Toggle full stage / split view">💢 full</button>
       <button id="centerBtn" class="btn ghost" title="Pan back to your content">⊕ Center</button>
       <button id="unstickBtn" class="btn ghost" title="Free a block stuck to your cursor (or press Esc)">🪄 Unstick</button>
+
+      <!-- Status: fixed width, pushed to far right, can't shift buttons -->
+      <span id="backupStatus" title="Termux backup server status" style="flex:0 0 auto;margin-left:auto;width:200px;text-align:right;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⚫ backup off</span>
     </header>
     <div id="stageWrap">
       <div id="stage">
@@ -2138,6 +2157,113 @@ const workspace = Blockly.inject('blocklyDiv', {
   move: { scrollbars: true, drag: true, wheel: false }
 });
 
+// __colorNames2: show color NAME in the picker popup (touch-friendly, for grayscale screens)
+(function(){
+  if (!Blockly.FieldColour) return;
+
+  function hexToRgb(hex){
+    hex = String(hex || '').replace('#','');
+    if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+    const n = parseInt(hex, 16);
+    if (isNaN(n)) return null;
+    return { r: (n>>16)&255, g: (n>>8)&255, b: n&255 };
+  }
+  function rgbToHsl(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    let h=0,s=0; const l=(max+min)/2;
+    if (max!==min){
+      const d=max-min;
+      s = l>0.5 ? d/(2-max-min) : d/(max+min);
+      switch(max){
+        case r: h=(g-b)/d+(g<b?6:0); break;
+        case g: h=(b-r)/d+2; break;
+        case b: h=(r-g)/d+4; break;
+      }
+      h/=6;
+    }
+    return { h:h*360, s:s*100, l:l*100 };
+  }
+  function hueName(h){
+    if (h<15)  return 'red';
+    if (h<45)  return 'orange';
+    if (h<70)  return 'yellow';
+    if (h<100) return 'yellow-green';
+    if (h<160) return 'green';
+    if (h<200) return 'cyan';
+    if (h<250) return 'blue';
+    if (h<290) return 'purple';
+    if (h<330) return 'magenta';
+    return 'red';
+  }
+  function colorName(hex){
+    const rgb = hexToRgb(hex);
+    if (!rgb) return String(hex || '');
+    const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    if (l <= 8) return 'black';
+    if (l >= 94) return 'white';
+    if (s <= 12){
+      if (l < 35) return 'dark gray';
+      if (l > 70) return 'light gray';
+      return 'gray';
+    }
+    let base = hueName(h);
+    if ((base === 'red' || base === 'magenta') && l > 65) base = 'pink';
+    if (base === 'orange' && l < 40) base = 'brown';
+    let prefix = '';
+    if (l < 30) prefix = 'dark ';
+    else if (l > 72) prefix = 'light ';
+    return (prefix + base).trim();
+  }
+  // expose for other uses
+  window._colorName = colorName;
+
+  const origShow = Blockly.FieldColour.prototype.showEditor_;
+  Blockly.FieldColour.prototype.showEditor_ = function() {
+    origShow.call(this);
+    const self = this;
+    try {
+      const dd = Blockly.DropDownDiv && Blockly.DropDownDiv.getContentDiv ? Blockly.DropDownDiv.getContentDiv() : null;
+      if (!dd) return;
+      // Build / reuse a label at the top of the dropdown
+      let label = dd.querySelector('.__colorNameLabel');
+      if (!label) {
+        label = document.createElement('div');
+        label.className = '__colorNameLabel';
+        label.style.cssText = 'font-family:sans-serif;font-size:15px;font-weight:bold;text-align:center;padding:6px 4px;margin-bottom:4px;border-bottom:1px solid #ccc;color:#111;background:#fff;border-radius:6px;';
+        dd.insertBefore(label, dd.firstChild);
+      }
+      function setLabel(hex){
+        label.textContent = colorName(hex) + '  (' + hex + ')';
+      }
+      setLabel(self.getValue());
+      // Update the label as the user taps/moves over swatches in the picker.
+      const picker = dd.querySelector('.blocklyColourTable') || dd;
+      const handler = (ev) => {
+        const cell = ev.target && ev.target.closest ? ev.target.closest('.blocklyColourSwatch, td') : null;
+        let hex = null;
+        if (cell) {
+          // swatch background colour -> hex
+          const bg = cell.style && cell.style.backgroundColor;
+          if (bg) {
+            const m = bg.match(/\d+/g);
+            if (m && m.length >= 3) {
+              hex = '#' + [0,1,2].map(i => Number(m[i]).toString(16).padStart(2,'0')).join('');
+            }
+          }
+          const lbl = cell.getAttribute && (cell.getAttribute('data-colour') || cell.getAttribute('title'));
+          if (lbl && lbl[0] === '#') hex = lbl;
+        }
+        if (hex) setLabel(hex);
+      };
+      picker.addEventListener('pointerdown', handler, true);
+      picker.addEventListener('pointermove', handler, true);
+    } catch(e) {}
+  };
+})();
+
+
+
 
 // __columnTabs -------------------------------------------------------------
 // Tabs are bookmarks to COLUMNS of one shared workspace.
@@ -3721,6 +3847,46 @@ function unstickGesture() {
 }
 document.getElementById('unstickBtn').onclick = unstickGesture;
 
+// __headerRedesign JS
+(function(){
+  const snb = document.getElementById('saveNowBtn');
+  if (snb) snb.addEventListener('click', () => { if (window._saveNow) window._saveNow(); });
+  const btn = document.getElementById('fileMenuBtn');
+  const menu = document.getElementById('fileMenu');
+  if (btn && menu) {
+    function closeMenu(){ menu.style.display = 'none'; }
+    function toggleMenu(e){ e.stopPropagation(); menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'flex' : 'none'; }
+    btn.addEventListener('click', toggleMenu);
+    document.addEventListener('click', (e) => { if (!menu.contains(e.target) && e.target !== btn) closeMenu(); });
+    // close after picking any item
+    menu.querySelectorAll('.fileMenuItem').forEach(it => it.addEventListener('click', () => setTimeout(closeMenu, 0)));
+  }
+
+  // Copy code button
+  const copyBtn = document.getElementById('copyCodeBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        const code = Blockly.JavaScript.workspaceToCode(workspace);
+        let ok = false;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try { await navigator.clipboard.writeText(code); ok = true; } catch(e) {}
+        }
+        if (!ok) {
+          // fallback: temporary textarea
+          const ta = document.createElement('textarea');
+          ta.value = code; ta.style.position='fixed'; ta.style.left='-9999px';
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); ok = true; } catch(e) {}
+          document.body.removeChild(ta);
+        }
+        log(ok ? '📋 code copied to clipboard' : 'copy failed — clipboard blocked', ok ? 'ok' : 'err');
+      } catch(e) { log('copy failed: ' + e.message, 'err'); }
+    });
+  }
+})();
+
+
 // __autoUnstick: if a gesture is still alive shortly after the finger lifts, it's stuck.
 (function(){
   function checkStuck() {
@@ -4016,6 +4182,42 @@ let currentProject = null;
     } catch (e) { log('delete failed: ' + e.message, 'err'); }
   };
 
+  const _renameBtn = document.getElementById('projectRenameBtn');
+  if (_renameBtn) _renameBtn.addEventListener('click', async () => {
+    if (!currentProject) { log('no project selected', 'err'); return; }
+    const newName = prompt('Rename project to:', currentProject);
+    if (!newName || !newName.trim() || newName.trim() === currentProject) return;
+    const target = newName.trim();
+    try {
+      // 1) load current project data
+      const r = await fetch(`/project/${encodeURIComponent(currentProject)}/load`);
+      let data = {};
+      if (r.ok) { try { data = await r.json(); } catch(e){} }
+      // 2) create the new project
+      const rn = await fetch('/project/new', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: target })
+      });
+      const nd = await rn.json();
+      if (!rn.ok) { log('rename: ' + (nd.error || 'name taken?'), 'err'); return; }
+      // 3) save current data into the new project
+      await fetch(`/project/${encodeURIComponent(nd.project)}/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      // 4) delete the old project
+      const oldName = currentProject;
+      await fetch('/project/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: oldName })
+      });
+      await refreshProjects(nd.project);
+      await loadProject(nd.project);
+      log(`✏ renamed "${oldName}" → "${nd.project}"`, 'ok');
+    } catch (e) { log('rename failed: ' + e.message, 'err'); }
+  });
+
+  window._saveNow = async function(){ try { await autoSave(); log('💾 saved', 'ok'); } catch(e){ log('save failed: ' + e.message, 'err'); } };
   async function autoSave() {
     if (!serverAlive || !currentProject) return;
     try {
