@@ -81,6 +81,11 @@
                    background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #555;
                    border-radius: 7px; padding: 5px 9px; font-size: 15px; cursor: pointer; }
   #stage canvas { position: absolute; top: 0; left: 0; display: block; }
+  #stage.website-mode { box-shadow: 0 0 0 2px #888, 0 8px 30px rgba(0,0,0,0.2); }
+  #webLayer .web-el { position:absolute; pointer-events:auto; font-family:sans-serif; }
+  #webLayer button.web-el { padding:8px 14px; border-radius:8px; border:1px solid #999; background:#f3f3f3; font-size:15px; cursor:pointer; }
+  #webLayer input.web-el { padding:8px 10px; border-radius:8px; border:1.5px solid #999; font-size:15px; }
+  #webLayer .web-el.web-label { font-size:16px; color:#111; }
   #layerSPRITES { pointer-events: none; }
 
   /* On-screen D-pad — fires the same key events as a physical keyboard */
@@ -243,6 +248,7 @@
         <canvas id="layerFG"></canvas>
         <canvas id="layerSPRITES"></canvas>
         <div id="penCursor" data-state="up">p</div>
+        <div id="webLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;display:none;"></div>
         <div id="tapeMeasure" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:8px 14px;border-radius:10px;font-family:ui-monospace,monospace;font-size:14px;font-weight:600;z-index:120;pointer-events:none;display:none;">tape</div>
         <div id="tapeMarker" style="position:absolute;width:20px;height:20px;border:2px solid #ff2d75;border-radius:50%;background:rgba(255,45,117,0.25);pointer-events:none;z-index:115;display:none;transform:translate(-50%,-50%);"></div>
 
@@ -431,6 +437,28 @@
     </block>
     <block type="pms_add_input"></block>
     <block type="pms_input"></block>
+  </category>
+
+  <category name="Website" colour="#00B8D4">
+    <block type="web_add_button">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">Click me</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_field">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_label">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">Hello</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_set_label">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">New text</field></shadow></value>
+    </block>
+    <block type="web_when_clicked"></block>
+    <block type="web_field_text"></block>
   </category>
 
   <category name="Costumes" colour="#03A9F4">
@@ -1669,6 +1697,106 @@ Blockly.Blocks['pms_input'] = {
   }
 };
 
+// ---- Website element blocks ----
+// Helper: dropdown of element ids found in the workspace (by block type).
+function _webIdDropdown(self, types) {
+  return new Blockly.FieldDropdown(function() {
+    const ids = new Set();
+    try {
+      const all = (typeof workspace !== 'undefined' && workspace) ? workspace.getAllBlocks(false) : [];
+      for (const b of all) {
+        if (types.indexOf(b.type) >= 0) {
+          const v = b.getFieldValue('ID');
+          if (v) ids.add(v);
+        }
+      }
+    } catch(e){}
+    try { const cur = self.getFieldValue && self.getFieldValue('ID'); if (cur) ids.add(cur); } catch(e){}
+    const opts = Array.from(ids).map(n => [n, n]);
+    if (!opts.length) opts.push(['(none yet)', '']);
+    return opts;
+  });
+}
+
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'web_add_button',
+    message0: 'add button %1 id %2 at x %3 y %4',
+    args0: [
+      { type: 'input_value', name: 'TEXT' },
+      { type: 'field_input', name: 'ID', text: 'btn1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'Add a clickable button at x/y.'
+  },
+  {
+    type: 'web_add_field',
+    message0: 'add text field id %1 at x %2 y %3',
+    args0: [
+      { type: 'field_input', name: 'ID', text: 'field1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'Add a text field people can type in.'
+  },
+  {
+    type: 'web_add_label',
+    message0: 'add label %1 id %2 at x %3 y %4',
+    args0: [
+      { type: 'input_value', name: 'TEXT' },
+      { type: 'field_input', name: 'ID', text: 'label1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'Add a text label at x/y.'
+  },
+  {
+    type: 'web_set_label',
+    message0: 'set label %1 to %2',
+    args0: [
+      { type: 'field_input', name: 'ID', text: 'label1' },
+      { type: 'input_value', name: 'TEXT' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'Change a label\'s text.'
+  }
+]);
+
+// when button [id] clicked  (hat-ish block with a statement body)
+Blockly.Blocks['web_when_clicked'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput()
+      .appendField('when button')
+      .appendField(_webIdDropdown(self, ['web_add_button']), 'ID')
+      .appendField('clicked');
+    this.appendStatementInput('DO');
+    this.setColour('#00B8D4');
+    this.setTooltip('Runs the blocks inside when that button is clicked.');
+  }
+};
+
+// text in field [id]  (reporter)
+Blockly.Blocks['web_field_text'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput()
+      .appendField('text in field')
+      .appendField(_webIdDropdown(self, ['web_add_field']), 'ID');
+    this.setOutput(true, null);
+    this.setColour('#00B8D4');
+    this.setTooltip('What the person typed in that text field.');
+  }
+};
+
 Blockly.Blocks['list_name'] = {
   init: function() {
     const self = this;
@@ -1803,6 +1931,40 @@ JG.forBlock['pms_add_input'] = () => '';  // declaration only, no runtime code
 JG.forBlock['pms_input'] = b => {
   const name = b.getFieldValue('NAME') || '';
   return [`Stage._input(${JSON.stringify(name)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_add_button'] = b => {
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addButton(${text}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_field'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addField(${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_label'] = b => {
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addLabel(${text}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_set_label'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  return `Stage.setLabel(${JSON.stringify(id)}, ${text});\n`;
+};
+JG.forBlock['web_when_clicked'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const body = JG.statementToCode(b, 'DO');
+  return `Stage.onButtonClick(${JSON.stringify(id)}, async () => {\n${body}});\n`;
+};
+JG.forBlock['web_field_text'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  return [`Stage.fieldText(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
 };
 JG.forBlock['list_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
@@ -3825,6 +3987,71 @@ const Stage = (() => {
       const v = top[String(inputName)];
       return (v === undefined || v === null) ? '' : v;
     },
+    // ---- website elements (real HTML over the stage) ----
+    _webEls: {},          // id -> DOM node
+    _webClickHandlers: {},// id -> fn
+    _webLayerEl() { return document.getElementById('webLayer'); },
+    _webClear() {
+      const layer = this._webLayerEl();
+      if (layer) layer.innerHTML = '';
+      this._webEls = {};
+      this._webClickHandlers = {};
+    },
+    // convert stage coords (centered, Y-up) to layer pixels (top-left, Y-down)
+    _webPos(x, y) {
+      const px = (W / 2) + (Number(x) || 0);
+      const py = (H / 2) - (Number(y) || 0);
+      return { px, py };
+    },
+    _webPlace(node, x, y) {
+      const { px, py } = this._webPos(x, y);
+      node.style.left = px + 'px';
+      node.style.top = py + 'px';
+      node.style.transform = 'translate(-50%, -50%)';
+    },
+    addButton(text, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const b = document.createElement('button');
+      b.className = 'web-el';
+      b.textContent = String(text == null ? '' : text);
+      this._webPlace(b, x, y);
+      const key = String(id);
+      b.addEventListener('click', () => {
+        const fn = this._webClickHandlers[key];
+        if (fn) { try { fn(); } catch(e){ console.error(e); } }
+      });
+      layer.appendChild(b);
+      this._webEls[key] = b;
+    },
+    addField(id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const f = document.createElement('input');
+      f.className = 'web-el';
+      f.type = 'text';
+      this._webPlace(f, x, y);
+      layer.appendChild(f);
+      this._webEls[String(id)] = f;
+    },
+    addLabel(text, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const d = document.createElement('div');
+      d.className = 'web-el web-label';
+      d.textContent = String(text == null ? '' : text);
+      this._webPlace(d, x, y);
+      layer.appendChild(d);
+      this._webEls[String(id)] = d;
+    },
+    fieldText(id) {
+      const el = this._webEls[String(id)];
+      return (el && 'value' in el) ? el.value : '';
+    },
+    setLabel(id, text) {
+      const el = this._webEls[String(id)];
+      if (el) el.textContent = String(text == null ? '' : text);
+    },
+    onButtonClick(id, fn) {
+      this._webClickHandlers[String(id)] = fn;
+    },
     drawPmsWithInputs(name, x, y, values) {
       const code = this._pmsCode[String(name)];
       // If we have code, RE-RUN it with the given inputs (so inputs affect drawing).
@@ -4035,6 +4262,12 @@ document.getElementById('runBtn').onclick = async () => {
     _setRunBtn(true);
     // Inject a periodic snapshot of local vars into Stage._userVars
     Stage._userVars = Stage._userVars || {};
+    // webLayer-show-on-run: reset and reveal the website element layer
+    try {
+      Stage._webClear();
+      const _wl = document.getElementById('webLayer');
+      if (_wl) _wl.style.display = 'block';
+    } catch(e){}
     // Load all pre-made-sprites into the engine before running
     try {
       const pr = await fetch('/pms');
