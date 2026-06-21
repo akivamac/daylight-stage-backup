@@ -5072,7 +5072,7 @@ _applyLayout();
 (() => {
   const wrap = document.getElementById('stageWrap');
   const ro = new ResizeObserver(entries => {
-    if (typeof _websiteModeActive !== 'undefined' && _websiteModeActive) return; // fixed size in website mode
+    if ((typeof _websiteModeActive !== 'undefined' && _websiteModeActive) || document.getElementById('stage').classList.contains('website-mode')) return; // fixed size in website mode
     for (const e of entries) {
       const w = Math.max(50, Math.floor(e.contentRect.width));
       const h = Math.max(50, Math.floor(e.contentRect.height));
@@ -5090,6 +5090,25 @@ let currentProject = null;
 let _websiteCfg = { on: false, size: 'phone' };
 let _websiteModeActive = false;  // when true, auto-fit ResizeObserver is paused
 const _WEBSITE_SIZES = { phone: [360, 640], tablet: [768, 1024], page: [1000, 700] };
+let _wdTimer = null;
+function _websiteWatchdog() {
+  // For ~1.5s, keep forcing the website size every 100ms so nothing (ResizeObserver,
+  // layout settling) can override it. Cancels any prior watchdog.
+  if (_wdTimer) { clearInterval(_wdTimer); _wdTimer = null; }
+  if (!_websiteCfg || !_websiteCfg.on) return;
+  const dims = _WEBSITE_SIZES[_websiteCfg.size] || _WEBSITE_SIZES.phone;
+  let ticks = 0;
+  _wdTimer = setInterval(() => {
+    ticks++;
+    try {
+      const sz = Stage._size ? Stage._size() : null;
+      if (!sz || sz.W !== dims[0] || sz.H !== dims[1]) {
+        Stage._setSize(dims[0], dims[1]);
+      }
+    } catch(e){}
+    if (ticks >= 15) { clearInterval(_wdTimer); _wdTimer = null; }
+  }, 100);
+}
 function _applyWebsiteMode(cfg) {
   _websiteCfg = (cfg && cfg.on) ? { on: true, size: cfg.size || 'phone' } : { on: false, size: 'phone' };
   _websiteModeActive = _websiteCfg.on;
@@ -5102,6 +5121,7 @@ function _applyWebsiteMode(cfg) {
     const wrapOn = document.getElementById('stageWrap');
     if (wrapOn) wrapOn.classList.add('website-scroll');
     if (wl) wl.style.display = 'block';
+    _websiteWatchdog();
   } else {
     if (stageEl) stageEl.classList.remove('website-mode');
     const wrapOff = document.getElementById('stageWrap');
