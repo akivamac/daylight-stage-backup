@@ -5248,6 +5248,12 @@ window._getWebsiteCfg = () => _websiteCfg;
         const cfg = (typeof data === 'object' && data && data.website) ? data.website : { on: false, size: 'phone' };
         _websiteCfg = cfg;
         if (typeof _applyWebsiteMode === 'function') _applyWebsiteMode(cfg);
+        // reassert website size next frame (after layout/resize settles, so it wins)
+        if (cfg && cfg.on) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => { try { _applyWebsiteMode(cfg); } catch(e){} });
+          });
+        }
       } catch(e){}
       lastSerialized = '';
       localStorage.setItem('stage_currentProject', name);
