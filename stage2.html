@@ -86,6 +86,10 @@
   #webLayer button.web-el { padding:8px 14px; border-radius:8px; border:1px solid #999; background:#f3f3f3; font-size:15px; cursor:pointer; }
   #webLayer input.web-el { padding:8px 10px; border-radius:8px; border:1.5px solid #999; font-size:15px; }
   #webLayer .web-el.web-label { font-size:16px; color:#111; }
+  #webLayer .web-el.web-heading { font-size:26px; font-weight:bold; color:#111; }
+  #webLayer .web-el.web-checkwrap { font-size:16px; color:#111; display:inline-flex; align-items:center; cursor:pointer; }
+  #webLayer .web-el.web-box { border-radius:4px; }
+  #webLayer .web-el.web-img { display:block; }
   #layerSPRITES { pointer-events: none; }
 
   /* On-screen D-pad — fires the same key events as a physical keyboard */
@@ -459,6 +463,40 @@
     </block>
     <block type="web_when_clicked"></block>
     <block type="web_field_text"></block>
+    <block type="web_add_heading">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">Title</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_checkbox">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">Check me</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_is_checked"></block>
+    <block type="web_add_box">
+      <value name="W"><shadow type="math_number"><field name="NUM">80</field></shadow></value>
+      <value name="H"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#4caf50</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_image_url">
+      <value name="URL"><shadow type="text"><field name="TEXT">https://</field></shadow></value>
+      <value name="W"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_image_pms">
+      <value name="W"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_image_file">
+      <value name="W"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
   </category>
 
   <category name="Costumes" colour="#03A9F4">
@@ -1797,6 +1835,187 @@ Blockly.Blocks['web_field_text'] = {
   }
 };
 
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'web_add_heading',
+    message0: 'add heading %1 id %2 at x %3 y %4',
+    args0: [
+      { type: 'input_value', name: 'TEXT' },
+      { type: 'field_input', name: 'ID', text: 'head1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'Big bold heading text.'
+  },
+  {
+    type: 'web_add_checkbox',
+    message0: 'add checkbox %1 id %2 at x %3 y %4',
+    args0: [
+      { type: 'input_value', name: 'TEXT' },
+      { type: 'field_input', name: 'ID', text: 'check1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'A checkbox with a label.'
+  },
+  {
+    type: 'web_add_box',
+    message0: 'add box width %1 height %2 color %3 id %4 at x %5 y %6',
+    args0: [
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' },
+      { type: 'input_value', name: 'COLOR' },
+      { type: 'field_input', name: 'ID', text: 'box1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'A colored rectangle.'
+  },
+  {
+    type: 'web_add_image_url',
+    message0: 'add image from url %1 width %2 id %3 at x %4 y %5',
+    args0: [
+      { type: 'input_value', name: 'URL' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'field_input', name: 'ID', text: 'img1' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#00B8D4', inputsInline: true,
+    tooltip: 'An image from a web address.'
+  }
+]);
+
+// Checkbox reporter
+Blockly.Blocks['web_is_checked'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput()
+      .appendField('checkbox')
+      .appendField(_webIdDropdown(self, ['web_add_checkbox']), 'ID')
+      .appendField('is checked');
+    this.setOutput(true, 'Boolean');
+    this.setColour('#00B8D4');
+    this.setTooltip('True if that checkbox is checked.');
+  }
+};
+
+// Image from pms (dropdown of pms names)
+Blockly.Blocks['web_add_image_pms'] = {
+  init: function() {
+    const self = this;
+    const dd = new Blockly.FieldDropdown(function() {
+      const names = (window._pmsNames || []).slice();
+      try { const cur = self.getFieldValue && self.getFieldValue('PMS'); if (cur && names.indexOf(cur) < 0) names.push(cur); } catch(e){}
+      const opts = names.map(n => [n, n]);
+      if (!opts.length) opts.push(['(no pre-made-sprites)', '']);
+      return opts;
+    });
+    dd.doClassValidation_ = function(v){ return v; };
+    this.appendDummyInput().appendField('add image from pms').appendField(dd, 'PMS');
+    this.appendValueInput('W').setCheck('Number').appendField('width');
+    this.appendDummyInput().appendField('id').appendField(new Blockly.FieldTextInput('img1'), 'ID');
+    this.appendValueInput('X').setCheck('Number').appendField('at x');
+    this.appendValueInput('Y').setCheck('Number').appendField('y');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour('#00B8D4');
+    this.setTooltip('Show a pre-made-sprite as a picture.');
+  }
+};
+
+// Custom clickable field: tapping it opens a device file picker.
+// Subclasses FieldLabelSerializable and uses showEditor_ (proper touch handling).
+class FieldImagePicker extends Blockly.FieldLabelSerializable {
+  showEditor_() {
+    const block = this.getSourceBlock();
+    if (!block) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    const cleanup = () => { try { document.body.removeChild(input); } catch(e){} };
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) { cleanup(); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        block._imgData = reader.result;
+        this.setValue('\u2713 image set');
+        try { if (typeof log === 'function') log('\uD83D\uDCC1 image stored in block', 'ok'); } catch(e){}
+        cleanup();
+      };
+      reader.onerror = cleanup;
+      reader.readAsDataURL(file);
+    });
+    input.click();
+  }
+}
+// register so it can be created
+try { Blockly.fieldRegistry.register('field_image_picker', FieldImagePicker); } catch(e){}
+
+// Device-image block: a 'pick image' field stores the chosen image as a data URL
+// in a hidden field (so it saves with the project).
+Blockly.Blocks['web_add_image_file'] = {
+  init: function() {
+    const self = this;
+    this._imgData = '';  // data URL
+    // clickable label that opens a file picker
+    const pickLabel = new FieldImagePicker('\uD83D\uDCC1 pick image');
+    pickLabel.EDITABLE = true;
+    pickLabel.SERIALIZABLE = true;
+    this.appendDummyInput()
+      .appendField('add image')
+      .appendField(pickLabel, 'PICK');
+    this.appendDummyInput().appendField('id').appendField(new Blockly.FieldTextInput('img1'), 'ID');
+    this.appendValueInput('W').setCheck('Number').appendField('width');
+    this.appendValueInput('X').setCheck('Number').appendField('at x');
+    this.appendValueInput('Y').setCheck('Number').appendField('y');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour('#00B8D4');
+    this.setTooltip('Pick an image from your device. It saves inside the project.');
+
+    // Make the PICK label clickable -> open a file input.
+    setTimeout(() => {
+      try {
+        const fld = self.getField('PICK');
+        if (fld && fld.getClickTarget_) {
+          const tgt = fld.getClickTarget_();
+          if (tgt) tgt.style.cursor = 'pointer';
+        }
+      } catch(e){}
+    }, 0);
+  },
+
+  // Clicking the block's PICK field opens a file dialog.
+  // We hook onMouseDown via a custom field click using Blockly's event.
+  onchange: function() {},
+
+  saveExtraState: function() {
+    return { img: this._imgData || '' };
+  },
+  loadExtraState: function(state) {
+    if (state && state.img) {
+      this._imgData = state.img;
+      const fld = this.getField('PICK');
+      if (fld) fld.setValue('\u2713 image set');
+    }
+  }
+};
+
+
+
 Blockly.Blocks['list_name'] = {
   init: function() {
     const self = this;
@@ -1965,6 +2184,57 @@ JG.forBlock['web_when_clicked'] = b => {
 JG.forBlock['web_field_text'] = b => {
   const id = b.getFieldValue('ID') || '';
   return [`Stage.fieldText(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_add_heading'] = b => {
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addHeading(${text}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_checkbox'] = b => {
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addCheckbox(${text}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_is_checked'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  return [`Stage.isChecked(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_add_box'] = b => {
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '50';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_NONE) || '50';
+  const color = JG.valueToCode(b, 'COLOR', JG.ORDER_NONE) || "'#cccccc'";
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addBox(${w}, ${h}, ${color}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_image_url'] = b => {
+  const url = JG.valueToCode(b, 'URL', JG.ORDER_NONE) || "''";
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '100';
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addImageUrl(${url}, ${w}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_image_pms'] = b => {
+  const pms = b.getFieldValue('PMS') || '';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '100';
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addImagePms(${JSON.stringify(pms)}, ${w}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_image_file'] = b => {
+  const data = (b._imgData || '');
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '100';
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addImageUrl(${JSON.stringify(data)}, ${w}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
 };
 JG.forBlock['list_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
@@ -4048,6 +4318,77 @@ const Stage = (() => {
     setLabel(id, text) {
       const el = this._webEls[String(id)];
       if (el) el.textContent = String(text == null ? '' : text);
+    },
+    addHeading(text, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const h = document.createElement('div');
+      h.className = 'web-el web-heading';
+      h.textContent = String(text == null ? '' : text);
+      this._webPlace(h, x, y);
+      layer.appendChild(h);
+      this._webEls[String(id)] = h;
+    },
+    addCheckbox(label, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const wrap = document.createElement('label');
+      wrap.className = 'web-el web-checkwrap';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'web-checkbox';
+      const span = document.createElement('span');
+      span.textContent = ' ' + String(label == null ? '' : label);
+      wrap.appendChild(cb); wrap.appendChild(span);
+      this._webPlace(wrap, x, y);
+      layer.appendChild(wrap);
+      // store the checkbox input itself so isChecked works
+      this._webEls[String(id)] = cb;
+    },
+    isChecked(id) {
+      const el = this._webEls[String(id)];
+      return !!(el && el.checked);
+    },
+    addBox(w, h, color, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const d = document.createElement('div');
+      d.className = 'web-el web-box';
+      d.style.width = (Number(w) || 50) + 'px';
+      d.style.height = (Number(h) || 50) + 'px';
+      d.style.background = String(color || '#cccccc');
+      this._webPlace(d, x, y);
+      layer.appendChild(d);
+      this._webEls[String(id)] = d;
+    },
+    addImageUrl(url, w, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const img = document.createElement('img');
+      img.className = 'web-el web-img';
+      img.src = String(url || '');
+      if (w) img.style.width = (Number(w) || 100) + 'px';
+      this._webPlace(img, x, y);
+      layer.appendChild(img);
+      this._webEls[String(id)] = img;
+    },
+    addImagePms(pmsName, w, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      // Render the pms ops to an offscreen canvas, then show as an image.
+      const ops = this._pmsStore[String(pmsName)];
+      const size = Number(w) || 100;
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const cx = c.getContext('2d');
+      if (ops && ops.length) {
+        cx.save();
+        cx.translate(size/2, size/2);
+        for (const op of ops) { try { applyOp(cx, op); } catch(e){} }
+        cx.restore();
+      }
+      const img = document.createElement('img');
+      img.className = 'web-el web-img';
+      img.src = c.toDataURL();
+      img.style.width = size + 'px';
+      this._webPlace(img, x, y);
+      layer.appendChild(img);
+      this._webEls[String(id)] = img;
     },
     onButtonClick(id, fn) {
       this._webClickHandlers[String(id)] = fn;
