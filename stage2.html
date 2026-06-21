@@ -90,6 +90,8 @@
     transform: translateX(-50%);
   }
   #stageWrap.website-scroll { overflow-y: auto; overflow-x: hidden; }
+  /* website-toggle-fix: pin d-pad (and its ⌨/📱 toggles) to bottom-left corner */
+  #stage.website-mode #dpad { bottom: 8px; left: 8px; }
 
   #webLayer .web-el { position:absolute; pointer-events:auto; font-family:sans-serif; }
   #webLayer button.web-el { padding:8px 14px; border-radius:8px; border:1px solid #999; background:#f3f3f3; font-size:15px; cursor:pointer; }
