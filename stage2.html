@@ -4393,6 +4393,52 @@ const Stage = (() => {
     onButtonClick(id, fn) {
       this._webClickHandlers[String(id)] = fn;
     },
+    // ---- element control ----
+    moveEl(id, x, y) {
+      const el = this._webEls[String(id)];
+      if (el) this._webPlace(el, x, y);
+    },
+    hideEl(id) {
+      const el = this._webEls[String(id)];
+      if (el) el.style.display = 'none';
+    },
+    showEl(id) {
+      const el = this._webEls[String(id)];
+      if (el) el.style.display = '';
+    },
+    deleteEl(id) {
+      const el = this._webEls[String(id)];
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      delete this._webEls[String(id)];
+      delete this._webClickHandlers[String(id)];
+    },
+    setButtonText(id, text) {
+      const el = this._webEls[String(id)];
+      if (el) el.textContent = String(text == null ? '' : text);
+    },
+    setHeadingText(id, text) {
+      const el = this._webEls[String(id)];
+      if (el) el.textContent = String(text == null ? '' : text);
+    },
+    setElColor(id, color) {
+      const el = this._webEls[String(id)];
+      if (!el) return;
+      // boxes use background; text elements use text color
+      if (el.classList && el.classList.contains('web-box')) el.style.background = String(color || '');
+      else el.style.color = String(color || '');
+    },
+    setElSize(id, size) {
+      const el = this._webEls[String(id)];
+      if (!el) return;
+      const n = Number(size) || 0;
+      if (el.classList && el.classList.contains('web-box')) {
+        el.style.width = n + 'px'; el.style.height = n + 'px';
+      } else if (el.classList && el.classList.contains('web-img')) {
+        el.style.width = n + 'px';
+      } else {
+        el.style.fontSize = n + 'px';
+      }
+    },
     drawPmsWithInputs(name, x, y, values) {
       const code = this._pmsCode[String(name)];
       // If we have code, RE-RUN it with the given inputs (so inputs affect drawing).
