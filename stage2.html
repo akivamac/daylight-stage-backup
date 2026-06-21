@@ -5272,6 +5272,13 @@ let currentProject = null;
   document.getElementById('projectNewBtn').onclick = async () => {
     const name = prompt('New project name (letters, numbers, spaces, _-., max 64 chars):');
     if (!name) return;
+    // WEB_ASK: is this a website project? what size?
+    let webCfg = { on: false, size: 'phone' };
+    if (confirm('Make this a WEBSITE project?\n\nOK = website (page with buttons/fields)\nCancel = normal drawing project')) {
+      let sz = (prompt('Size? type: phone, tablet, or page', 'phone') || 'phone').trim().toLowerCase();
+      if (['phone','tablet','page'].indexOf(sz) < 0) sz = 'phone';
+      webCfg = { on: true, size: sz };
+    }
     try {
       const r = await fetch('/project/new', {
         method: 'POST',
@@ -5282,6 +5289,10 @@ let currentProject = null;
       if (!r.ok) { log('new project: ' + (data.error || 'failed'), 'err'); return; }
       await refreshProjects(data.project);
       await loadProject(data.project);
+      // apply the chosen website mode, then persist it immediately
+      try { if (window._webMode) window._webMode.apply(webCfg); } catch(e){}
+      lastSerialized = '';            // force the next save to write
+      try { await autoSave(); } catch(e){}
     } catch (e) { log('new failed: ' + e.message, 'err'); }
   };
 
