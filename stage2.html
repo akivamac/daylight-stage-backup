@@ -5236,6 +5236,12 @@ window._getWebsiteCfg = () => _websiteCfg;
       }
       currentProject = name;
       window.__editingPms = null; // leaving pms-edit mode
+      // apply website mode from the loaded project (default off)
+      try {
+        const cfg = (typeof data === 'object' && data && data.website) ? data.website : { on: false, size: 'phone' };
+        _websiteCfg = cfg;
+        if (typeof _applyWebsiteMode === 'function') _applyWebsiteMode(cfg);
+      } catch(e){}
       lastSerialized = '';
       localStorage.setItem('stage_currentProject', name);
       log(`✓ loaded project "${name}"`, 'ok');
@@ -5250,6 +5256,15 @@ window._getWebsiteCfg = () => _websiteCfg;
   document.getElementById('projectNewBtn').onclick = async () => {
     const name = prompt('New project name (letters, numbers, spaces, _-., max 64 chars):');
     if (!name) return;
+    // WEBSITE_ASK_DONE: ask whether this is a website project + what size
+    let websiteCfg = { on: false, size: 'phone' };
+    const isWeb = confirm('Make this a WEBSITE project? (fixed-size page with buttons/fields)\n\nOK = website,  Cancel = normal drawing project');
+    if (isWeb) {
+      let sz = prompt('Website size? type: phone, tablet, or page', 'phone');
+      sz = (sz || 'phone').trim().toLowerCase();
+      if (['phone','tablet','page'].indexOf(sz) < 0) sz = 'phone';
+      websiteCfg = { on: true, size: sz };
+    }
     try {
       const r = await fetch('/project/new', {
         method: 'POST',
@@ -5260,6 +5275,10 @@ window._getWebsiteCfg = () => _websiteCfg;
       if (!r.ok) { log('new project: ' + (data.error || 'failed'), 'err'); return; }
       await refreshProjects(data.project);
       await loadProject(data.project);
+      // store the website flag by saving it into the new project
+      _websiteCfg = websiteCfg;
+      if (typeof _applyWebsiteMode === 'function') _applyWebsiteMode(websiteCfg);
+      if (typeof autoSave === 'function') { try { await autoSave(); } catch(e){} }
     } catch (e) { log('new failed: ' + e.message, 'err'); }
   };
 
@@ -5325,7 +5344,7 @@ window._getWebsiteCfg = () => _websiteCfg;
     if (!serverAlive || !currentProject) return;
     try {
       const state = Blockly.serialization.workspaces.save(workspace);
-      const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists() };
+      const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists(), website: _websiteCfg };
       const json = JSON.stringify(payload);
       if (json === lastSerialized) return;
       const r = await fetch(`/project/${encodeURIComponent(currentProject)}/save`, {
