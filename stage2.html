@@ -5063,6 +5063,7 @@ _applyLayout();
 (() => {
   const wrap = document.getElementById('stageWrap');
   const ro = new ResizeObserver(entries => {
+    if (typeof _websiteModeActive !== 'undefined' && _websiteModeActive) return; // fixed size in website mode
     for (const e of entries) {
       const w = Math.max(50, Math.floor(e.contentRect.width));
       const h = Math.max(50, Math.floor(e.contentRect.height));
@@ -5077,6 +5078,30 @@ window.addEventListener('resize', () => Blockly.svgResize(workspace));
 
 // ---------- Termux multi-project backup ----------
 let currentProject = null;
+let _websiteCfg = { on: false, size: 'phone' };
+let _websiteModeActive = false;  // when true, auto-fit ResizeObserver is paused
+const _WEBSITE_SIZES = { phone: [360, 640], tablet: [768, 1024], page: [1000, 700] };
+function _applyWebsiteMode(cfg) {
+  _websiteCfg = (cfg && cfg.on) ? { on: true, size: cfg.size || 'phone' } : { on: false, size: 'phone' };
+  _websiteModeActive = _websiteCfg.on;
+  const stageEl = document.getElementById('stage');
+  const wl = document.getElementById('webLayer');
+  if (_websiteCfg.on) {
+    const dims = _WEBSITE_SIZES[_websiteCfg.size] || _WEBSITE_SIZES.phone;
+    try { Stage._setSize(dims[0], dims[1]); Stage._center(); } catch(e){}
+    if (stageEl) stageEl.classList.add('website-mode');
+    if (wl) wl.style.display = 'block';
+  } else {
+    if (stageEl) stageEl.classList.remove('website-mode');
+    // re-fit to panel when leaving website mode
+    try {
+      const wrap = document.getElementById('stageWrap');
+      if (wrap) Stage._setSize(Math.max(50, wrap.clientWidth|0), Math.max(50, wrap.clientHeight|0));
+    } catch(e){}
+  }
+}
+window._applyWebsiteMode = _applyWebsiteMode;
+window._getWebsiteCfg = () => _websiteCfg;
 (() => {
   const BACKUP_URL = ''; // same-origin (served by stage-server.py)
   const SAVE_INTERVAL_MS = 60 * 1000;
