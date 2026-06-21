@@ -429,6 +429,8 @@
       <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
     </block>
+    <block type="pms_add_input"></block>
+    <block type="pms_input"></block>
   </category>
 
   <category name="Costumes" colour="#03A9F4">
@@ -1533,16 +1535,35 @@ Blockly.Blocks['sprite_name'] = {
 
 // pms list (names) is refreshed from the server into window._pmsNames
 window._pmsNames = window._pmsNames || [];
+// pms_DYNAMIC: draw_pms with slots that rebuild from the picked pms's inputs.
+function _pmsShadowFor(type) {
+  // returns [shadowType, setupFn] for a given input type
+  switch (type) {
+    case 'color': return 'colour_picker';
+    case 'truefalse': return 'logic_boolean';
+    case 'text': return 'text';
+    case 'spritename': return 'sprite_name';
+    default: return 'math_number';
+  }
+}
 Blockly.Blocks['draw_pms'] = {
   init: function() {
     const self = this;
-    const dd = new Blockly.FieldDropdown(function() {
-      const names = (window._pmsNames || []).slice();
-      try { const cur = self.getFieldValue && self.getFieldValue('NAME'); if (cur) { if (names.indexOf(cur) < 0) names.push(cur); } } catch(e){}
-      const opts = names.map(n => [n, n]);
-      if (!opts.length) opts.push(['(no pre-made-sprites)', '']);
-      return opts;
-    });
+    this._pmsInputNames = [];
+    const dd = new Blockly.FieldDropdown(
+      function() {
+        const names = (window._pmsNames || []).slice();
+        try { const cur = self.getFieldValue && self.getFieldValue('NAME'); if (cur) { if (names.indexOf(cur) < 0) names.push(cur); } } catch(e){}
+        const opts = names.map(n => [n, n]);
+        if (!opts.length) opts.push(['(no pre-made-sprites)', '']);
+        return opts;
+      },
+      function(newName) {
+        // validator fires when the picked pms changes -> rebuild slots
+        try { self._rebuildPmsInputs(newName); } catch(e){}
+        return newName;
+      }
+    );
     dd.doClassValidation_ = function(v){ return v; };
     this.appendDummyInput().appendField('draw pms').appendField(dd, 'NAME');
     this.appendValueInput('X').setCheck('Number').appendField('at x');
@@ -1551,7 +1572,100 @@ Blockly.Blocks['draw_pms'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour('#673AB7');
-    this.setTooltip('Stamp a pre-made-sprite at x/y.');
+    this.setTooltip('Stamp a pre-made-sprite at x/y. Picking one shows its inputs.');
+    // build initial input slots for whatever's selected
+    setTimeout(() => { try { this._rebuildPmsInputs(this.getFieldValue('NAME')); } catch(e){} }, 0);
+  },
+
+  // Rebuild the per-input value slots from the chosen pms's definitions.
+  _rebuildPmsInputs: function(pmsName) {
+    const defs = (window._pmsInputDefs && window._pmsInputDefs[pmsName]) ? window._pmsInputDefs[pmsName] : [];
+    const wanted = defs.map(d => d.name);
+    // Remove only slots that are no longer wanted (preserve existing ones + their values).
+    for (const nm of (this._pmsInputNames || [])) {
+      if (wanted.indexOf(nm) < 0 && this.getInput('INP_' + nm)) {
+        this.removeInput('INP_' + nm, true);
+      }
+    }
+    // Add only slots that don't already exist (so existing values survive).
+    for (const def of defs) {
+      const inputName = 'INP_' + def.name;
+      if (this.getInput(inputName)) continue; // already there, keep its value
+      const vi = this.appendValueInput(inputName).appendField(def.name);
+      try {
+        const shadowType = _pmsShadowFor(def.type);
+        const shadow = this.workspace.newBlock(shadowType);
+        if (shadowType === 'math_number') shadow.setFieldValue('0', 'NUM');
+        if (shadowType === 'text') shadow.setFieldValue('', 'TEXT');
+        if (shadowType === 'logic_boolean') shadow.setFieldValue('TRUE', 'BOOL');
+        if (shadowType === 'colour_picker') shadow.setFieldValue('#ff0000', 'COLOUR');
+        shadow.setShadow(true);
+        shadow.initSvg && shadow.initSvg();
+        const conn = vi.connection;
+        if (conn && shadow.outputConnection) conn.connect(shadow.outputConnection);
+        shadow.render && shadow.render();
+      } catch(e){}
+    }
+    this._pmsInputNames = wanted.slice();
+    this.setInputsInline(true);
+    if (this.rendered) this.render();
+  },
+
+  // Save/restore which inputs exist so reload keeps the slots.
+  saveExtraState: function() {
+    return { pms: this.getFieldValue('NAME'), inputNames: (this._pmsInputNames || []).slice() };
+  },
+  loadExtraState: function(state) {
+    if (!state) return;
+    // rebuild from the saved pms name (defs come from cache; may need a tick)
+    const nm = state.pms;
+    setTimeout(() => { try { this._rebuildPmsInputs(nm); } catch(e){} }, 0);
+  }
+};
+
+// pms_add_input: declare a typed input for THIS pre-made-sprite
+Blockly.Blocks['pms_add_input'] = {
+  init: function() {
+    this.appendDummyInput()
+      .appendField('add input')
+      .appendField(new Blockly.FieldTextInput('size'), 'NAME')
+      .appendField('type')
+      .appendField(new Blockly.FieldDropdown([
+        ['number','number'], ['true/false','truefalse'], ['color','color'],
+        ['text','text'], ['sprite name','spritename']
+      ]), 'TYPE');
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour('#673AB7');
+    this.setTooltip('Declare an input this pre-made-sprite accepts. Use it with the "input" block.');
+  }
+};
+
+// pms_input: reporter that reads the value of one of this pms's inputs
+Blockly.Blocks['pms_input'] = {
+  init: function() {
+    const self = this;
+    const dd = new Blockly.FieldDropdown(function() {
+      const names = new Set();
+      try {
+        const all = (typeof workspace !== 'undefined' && workspace) ? workspace.getAllBlocks(false) : [];
+        for (const b of all) {
+          if (b.type === 'pms_add_input') {
+            const v = b.getFieldValue('NAME');
+            if (v) names.add(v);
+          }
+        }
+      } catch(e){}
+      try { const cur = self.getFieldValue && self.getFieldValue('NAME'); if (cur) names.add(cur); } catch(e){}
+      const opts = Array.from(names).map(n => [n, n]);
+      if (!opts.length) opts.push(['(no inputs yet)', '']);
+      return opts;
+    });
+    dd.doClassValidation_ = function(v){ return v; };
+    this.appendDummyInput().appendField('input').appendField(dd, 'NAME');
+    this.setOutput(true, null);
+    this.setColour('#673AB7');
+    this.setTooltip('The value of one of this pre-made-sprite\'s inputs.');
   }
 };
 
@@ -1675,7 +1789,20 @@ JG.forBlock['draw_pms'] = b => {
   const name = b.getFieldValue('NAME') || '';
   const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
   const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
-  return `Stage.drawPms(${JSON.stringify(name)}, ${x}, ${y});\n`;
+  // collect input values into an object literal
+  const names = b._pmsInputNames || [];
+  const parts = [];
+  for (const nm of names) {
+    const v = JG.valueToCode(b, 'INP_' + nm, JG.ORDER_NONE) || "''";
+    parts.push(JSON.stringify(nm) + ': ' + v);
+  }
+  const valuesObj = '{' + parts.join(', ') + '}';
+  return `Stage.drawPmsWithInputs(${JSON.stringify(name)}, ${x}, ${y}, ${valuesObj});\n`;
+};
+JG.forBlock['pms_add_input'] = () => '';  // declaration only, no runtime code
+JG.forBlock['pms_input'] = b => {
+  const name = b.getFieldValue('NAME') || '';
+  return [`Stage._input(${JSON.stringify(name)})`, JG.ORDER_FUNCTION_CALL];
 };
 JG.forBlock['list_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
@@ -3687,6 +3814,39 @@ const Stage = (() => {
       return buf;
     },
 
+    // ---- pms inputs (Stage 2) ----
+    _pmsCode: {},                      // name -> generated JS code string
+    _pmsInputs: [],                    // stack of input-value objects (nested calls)
+    _setPmsCode(name, code) { this._pmsCode[String(name)] = code || ''; },
+    _input(inputName) {
+      // read from the top of the input stack (current stamp's values)
+      const top = this._pmsInputs[this._pmsInputs.length - 1];
+      if (!top) return '';
+      const v = top[String(inputName)];
+      return (v === undefined || v === null) ? '' : v;
+    },
+    drawPmsWithInputs(name, x, y, values) {
+      const code = this._pmsCode[String(name)];
+      // If we have code, RE-RUN it with the given inputs (so inputs affect drawing).
+      if (code) {
+        this._pmsInputs.push(values || {});
+        let ops = [];
+        try {
+          ops = this._captureOps(() => {
+            try { new Function('Stage', code)(Stage); } catch(e) {}
+          });
+        } finally {
+          this._pmsInputs.pop();
+        }
+        const key = '__pms__' + String(name) + '__' + (Stage._pmsStampSeq = (Stage._pmsStampSeq || 0) + 1);
+        costumes.set(key, { ops: ops });
+        pushOp(current, { type: 'costume_stamp', costume: key, x: Number(x) || 0, y: -(Number(y) || 0), rot: 0 });
+        return;
+      }
+      // Fallback: no code, use pre-captured ops (Stage 1 behavior).
+      this.drawPms(name, x, y);
+    },
+
     // ---- keyboard ----
     _onKey(key, fn) {
       const myRunId = currentRunId;
@@ -3884,7 +4044,7 @@ document.getElementById('runBtn').onclick = async () => {
         for (const entry of (pd.pms || [])) {
           try {
             const one = await fetch('/pms/' + encodeURIComponent(entry.name));
-            if (one.ok) { const oj = await one.json(); Stage._setPms(entry.name, oj.ops || []); }
+            if (one.ok) { const oj = await one.json(); Stage._setPms(entry.name, oj.ops || []); Stage._setPmsCode(entry.name, oj.code || ''); }
           } catch(e){}
         }
       }
@@ -4584,12 +4744,20 @@ let currentProject = null;
   let _currentPms = null;
   window._getCurrentPms = () => _currentPms;
 
+  window._pmsInputDefs = window._pmsInputDefs || {};  // name -> [{name,type}]
   async function refreshPmsList() {
     try {
       const r = await fetch('/pms');
       if (!r.ok) return [];
       const d = await r.json();
       window._pmsNames = (d.pms || []).map(x => x.name);
+      // load each pms's input definitions into the cache (for the call block slots)
+      for (const entry of (d.pms || [])) {
+        try {
+          const one = await fetch('/pms/' + encodeURIComponent(entry.name));
+          if (one.ok) { const oj = await one.json(); window._pmsInputDefs[entry.name] = oj.inputs || []; }
+        } catch(e){}
+      }
       return d.pms || [];
     } catch(e) { return []; }
   }
@@ -4649,15 +4817,28 @@ let currentProject = null;
     if (!name) return false;
     try {
       const code = Blockly.JavaScript.workspaceToCode(workspace);
-      // capture ops
-      const AsyncFunction2 = Object.getPrototypeOf(async function(){}).constructor;
+      // Scan the workspace for declared inputs (pms_add_input blocks).
+      const inputs = [];
+      try {
+        const all = workspace.getAllBlocks(false);
+        for (const b of all) {
+          if (b.type === 'pms_add_input') {
+            const nm = b.getFieldValue('NAME');
+            const ty = b.getFieldValue('TYPE') || 'number';
+            if (nm) inputs.push({ name: nm, type: ty });
+          }
+        }
+      } catch(e){}
+      // Capture ops with empty inputs (just for a preview/fallback).
       let ops = [];
-      ops = Stage._captureOps(() => {
-        // run synchronously-ish: we can't await here, but pms drawing is usually sync.
-        try { new Function('Stage', code)(Stage); } catch(e) {}
-      });
+      Stage._pmsInputs.push({});
+      try {
+        ops = Stage._captureOps(() => {
+          try { new Function('Stage', code)(Stage); } catch(e) {}
+        });
+      } finally { Stage._pmsInputs.pop(); }
       const ws = Blockly.serialization.workspaces.save(workspace);
-      const payload = { name: name, workspace: ws, ops: ops };
+      const payload = { name: name, workspace: ws, ops: ops, code: code, inputs: inputs };
       const r = await fetch('/pms/' + encodeURIComponent(name) + '/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       if (r.ok) { log('\u2728 pms "' + name + '" saved (' + ops.length + ' ops)', 'ok'); await refreshPmsList(); return true; }
       log('pms save failed', 'err'); return false;
