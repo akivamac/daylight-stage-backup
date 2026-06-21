@@ -5109,6 +5109,16 @@ function _websiteWatchdog() {
     if (ticks >= 15) { clearInterval(_wdTimer); _wdTimer = null; }
   }, 100);
 }
+function _collapseOverlaysForWebsite(on) {
+  // In website mode, hide the d-pad and watch panel by default so they don't
+  // cover page content. Their toggle buttons (the small ⌨ and 👁) stay tappable.
+  const dpad = document.getElementById('dpad');
+  const watch = document.getElementById('watchPanel');
+  if (on) {
+    if (dpad) dpad.classList.add('hidden');
+    if (watch) watch.style.display = 'none';
+  }
+}
 function _applyWebsiteMode(cfg) {
   _websiteCfg = (cfg && cfg.on) ? { on: true, size: cfg.size || 'phone' } : { on: false, size: 'phone' };
   _websiteModeActive = _websiteCfg.on;
@@ -5122,6 +5132,7 @@ function _applyWebsiteMode(cfg) {
     if (wrapOn) wrapOn.classList.add('website-scroll');
     if (wl) wl.style.display = 'block';
     _websiteWatchdog();
+    _collapseOverlaysForWebsite(true);
   } else {
     if (stageEl) stageEl.classList.remove('website-mode');
     const wrapOff = document.getElementById('stageWrap');
