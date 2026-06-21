@@ -81,7 +81,15 @@
                    background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #555;
                    border-radius: 7px; padding: 5px 9px; font-size: 15px; cursor: pointer; }
   #stage canvas { position: absolute; top: 0; left: 0; display: block; }
-  #stage.website-mode { box-shadow: 0 0 0 2px #888, 0 8px 30px rgba(0,0,0,0.2); }
+  /* website-stage-pos: center the fixed box horizontally, pin top, allow vertical scroll */
+  #stage.website-mode {
+    box-shadow: 0 0 0 2px #888, 0 8px 30px rgba(0,0,0,0.2);
+    inset: auto;            /* cancel the inset:0 pinning */
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  #stageWrap.website-scroll { overflow-y: auto; overflow-x: hidden; }
 
   #webLayer .web-el { position:absolute; pointer-events:auto; font-family:sans-serif; }
   #webLayer button.web-el { padding:8px 14px; border-radius:8px; border:1px solid #999; background:#f3f3f3; font-size:15px; cursor:pointer; }
@@ -5091,9 +5099,13 @@ function _applyWebsiteMode(cfg) {
     const dims = _WEBSITE_SIZES[_websiteCfg.size] || _WEBSITE_SIZES.phone;
     try { Stage._setSize(dims[0], dims[1]); Stage._center(); } catch(e){}
     if (stageEl) stageEl.classList.add('website-mode');
+    const wrapOn = document.getElementById('stageWrap');
+    if (wrapOn) wrapOn.classList.add('website-scroll');
     if (wl) wl.style.display = 'block';
   } else {
     if (stageEl) stageEl.classList.remove('website-mode');
+    const wrapOff = document.getElementById('stageWrap');
+    if (wrapOff) wrapOff.classList.remove('website-scroll');
     // re-fit to panel when leaving website mode
     try {
       const wrap = document.getElementById('stageWrap');
