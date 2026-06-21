@@ -31,6 +31,28 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(PROJECTS_DIR, exist_ok=True)
 
+PMS_DIR = os.path.join(BACKUP_DIR, 'pms')
+os.makedirs(PMS_DIR, exist_ok=True)
+
+
+def pms_file(name):
+    return os.path.join(PMS_DIR, name + '.json')
+
+
+def list_pms():
+    if not os.path.isdir(PMS_DIR):
+        return []
+    out = []
+    for fn in sorted(os.listdir(PMS_DIR)):
+        if not fn.endswith('.json'):
+            continue
+        full = os.path.join(PMS_DIR, fn)
+        out.append({
+            'name': fn[:-5],
+            'updated': os.path.getmtime(full) if os.path.exists(full) else None,
+        })
+    return out
+
 
 def safe_project(name):
     name = (name or '').strip()
@@ -111,6 +133,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == '/projects':
             return self._json(200, {'projects': list_projects()})
 
+        if path == '/pms':
+            return self._json(200, {'pms': list_pms()})
+
+        m = re.match(r'^/pms/([^/]+)$', path)
+        if m:
+            name = safe_project(urllib.parse.unquote(m.group(1)))
+            if not name: return self._json(400, {'error': 'bad pms name'})
+            f = pms_file(name)
+            if not os.path.exists(f):
+                self.send_response(204); self._cors(); self.end_headers(); return
+            return self._send_file(f, 'application/json')
+
         m = re.match(r'^/project/([^/]+)/load$', path)
         if m:
             name = safe_project(urllib.parse.unquote(m.group(1)))
@@ -180,6 +214,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with open(os.path.join(d, f'snap-{ts}.json'), 'wb') as f: f.write(body)
             self._prune(d, 'snap-')
             return self._json(200, {'ok': True, 'project': name})
+
+        m = re.match(r'^/pms/([^/]+)/save$', path)
+        if m:
+            name = safe_project(urllib.parse.unquote(m.group(1)))
+            if not name: return self._json(400, {'error': 'bad pms name'})
+            try: json.loads(body)
+            except Exception as e:
+                return self._json(400, {'error': f'bad json: {e}'})
+            with open(pms_file(name), 'wb') as f: f.write(body)
+            return self._json(200, {'ok': True, 'pms': name})
+
+        if path == '/pms/new':
+            try: req = json.loads(body or b'{}')
+            except: req = {}
+            name = safe_project(req.get('name'))
+            if not name:
+                return self._json(400, {'error': 'name required'})
+            f = pms_file(name)
+            if os.path.exists(f):
+                return self._json(409, {'error': 'pms already exists'})
+            empty = json.dumps({'name': name, 'workspace': {}, 'ops': []}).encode()
+            with open(f, 'wb') as fh: fh.write(empty)
+            return self._json(200, {'ok': True, 'pms': name})
+
+        if path == '/pms/delete':
+            try: req = json.loads(body or b'{}')
+            except: req = {}
+            name = safe_project(req.get('name'))
+            if not name: return self._json(400, {'error': 'bad name'})
+            f = pms_file(name)
+            if not os.path.exists(f): return self._json(404, {'error': 'not found'})
+            trash = os.path.join(BACKUP_DIR, 'trash')
+            os.makedirs(trash, exist_ok=True)
+            stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            os.rename(f, os.path.join(trash, f'pms-{name}-{stamp}.json'))
+            return self._json(200, {'ok': True})
 
         self.send_response(404); self._cors(); self.end_headers()
 

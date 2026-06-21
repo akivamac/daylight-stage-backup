@@ -201,7 +201,6 @@
       <!-- __headerRedesign -->
       <div class="title">stage<span>.</span></div>
       <button id="runBtn" class="btn run">▶ Run</button>
-      <button id="stopBtn" class="btn stop">■ Stop</button>
 
       <!-- File dropdown -->
       <div id="fileMenuWrap" style="position:relative;display:inline-block;">
@@ -219,9 +218,14 @@
       <input type="file" id="loadInput" accept=".json,application/json" style="display:none">
 
       <!-- Projects dropdown (separate) -->
-      <select id="projectPicker" title="Switch project" style="padding:8px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:600;min-height:40px;">
+      <select id="projectPicker" title="Switch project" style="display:none;">
         <option value="">— pick a project —</option>
       </select>
+      <!-- __projectDropdown -->
+      <div id="projDropWrap" style="position:relative;display:inline-block;">
+        <button id="projDropBtn" class="btn ghost" title="Switch project" style="min-width:140px;text-align:left;">— pick a project —</button>
+        <div id="projDropMenu" style="display:none;position:absolute;top:100%;left:0;z-index:1000;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,0.18);min-width:200px;max-height:60vh;overflow-y:auto;padding:6px;flex-direction:column;gap:2px;"></div>
+      </div>
 
       <button id="copyCodeBtn" class="btn ghost" title="Copy the generated code to clipboard">📋 Copy code</button>
       <button id="trashBtn" class="btn ghost" title="Open trash (deleted blocks)">🗑</button>
@@ -420,6 +424,10 @@
     </block>
     <block type="sprite_on_ground">
       <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="draw_pms">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
     </block>
   </category>
 
@@ -1523,6 +1531,30 @@ Blockly.Blocks['sprite_name'] = {
   }
 };
 
+// pms list (names) is refreshed from the server into window._pmsNames
+window._pmsNames = window._pmsNames || [];
+Blockly.Blocks['draw_pms'] = {
+  init: function() {
+    const self = this;
+    const dd = new Blockly.FieldDropdown(function() {
+      const names = (window._pmsNames || []).slice();
+      try { const cur = self.getFieldValue && self.getFieldValue('NAME'); if (cur) { if (names.indexOf(cur) < 0) names.push(cur); } } catch(e){}
+      const opts = names.map(n => [n, n]);
+      if (!opts.length) opts.push(['(no pre-made-sprites)', '']);
+      return opts;
+    });
+    dd.doClassValidation_ = function(v){ return v; };
+    this.appendDummyInput().appendField('draw pms').appendField(dd, 'NAME');
+    this.appendValueInput('X').setCheck('Number').appendField('at x');
+    this.appendValueInput('Y').setCheck('Number').appendField('y');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour('#673AB7');
+    this.setTooltip('Stamp a pre-made-sprite at x/y.');
+  }
+};
+
 Blockly.Blocks['list_name'] = {
   init: function() {
     const self = this;
@@ -1638,6 +1670,12 @@ JG.forBlock['event_run_cont'] = () => '';
 JG.forBlock['sprite_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
   return [JSON.stringify(name), JG.ORDER_ATOMIC];
+};
+JG.forBlock['draw_pms'] = b => {
+  const name = b.getFieldValue('NAME') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.drawPms(${JSON.stringify(name)}, ${x}, ${y});\n`;
 };
 JG.forBlock['list_name'] = b => {
   const name = b.getFieldValue('NAME') || '';
@@ -3625,6 +3663,30 @@ const Stage = (() => {
     },
     stopAll() { throw new Error('__STOPPED__'); },
 
+    // ---- pre-made-sprites (pms) ----
+    _pmsStore: {},                     // name -> ops array
+    _setPms(name, ops) { this._pmsStore[String(name)] = ops || []; },
+    drawPms(name, x, y) {
+      const ops = this._pmsStore[String(name)];
+      if (!ops || !ops.length) return;
+      // Register a temporary costume so we can reuse the costume_stamp op.
+      const key = '__pms__' + String(name);
+      costumes.set(key, { ops: ops });
+      pushOp(current, { type: 'costume_stamp', costume: key, x: Number(x) || 0, y: -(Number(y) || 0), rot: 0 });
+    },
+    // Capture: run a draw function's ops into a buffer and return them.
+    _captureOps(drawFn) {
+      const prev = capturingCostume;
+      const buf = [];
+      capturingCostume = buf;
+      const penSnap = { ...pen };
+      pen.x = 0; pen.y = 0; pen.down = false;
+      try { drawFn(); } catch (e) { /* ignore */ }
+      capturingCostume = prev;
+      Object.assign(pen, penSnap);
+      return buf;
+    },
+
     // ---- keyboard ----
     _onKey(key, fn) {
       const myRunId = currentRunId;
@@ -3787,7 +3849,16 @@ function detectFreezeRisks(code) {
   return risks;
 }
 
+let _isRunning = false;
+function _setRunBtn(running) {
+  _isRunning = running;
+  const b = document.getElementById('runBtn');
+  if (!b) return;
+  if (running) { b.textContent = '\u25a0 Stop'; b.classList.remove('run'); b.classList.add('stop'); }
+  else { b.textContent = '\u25b6 Run'; b.classList.remove('stop'); b.classList.add('run'); }
+}
 document.getElementById('runBtn').onclick = async () => {
+  if (_isRunning) { currentRunId++; log('stopped'); _setRunBtn(false); return; }
   try {
     const code = Blockly.JavaScript.workspaceToCode(workspace);
     if (!code.trim()) { log('nothing to run — drag some blocks in!', 'err'); return; }
@@ -3801,8 +3872,23 @@ document.getElementById('runBtn').onclick = async () => {
     namedHandlers.clear();
     _keyDebugged = false;
     log('running…');
+    _setRunBtn(true);
     // Inject a periodic snapshot of local vars into Stage._userVars
     Stage._userVars = Stage._userVars || {};
+    // Load all pre-made-sprites into the engine before running
+    try {
+      const pr = await fetch('/pms');
+      if (pr.ok) {
+        const pd = await pr.json();
+        window._pmsNames = (pd.pms || []).map(x => x.name);
+        for (const entry of (pd.pms || [])) {
+          try {
+            const one = await fetch('/pms/' + encodeURIComponent(entry.name));
+            if (one.ok) { const oj = await one.json(); Stage._setPms(entry.name, oj.ops || []); }
+          } catch(e){}
+        }
+      }
+    } catch(e){}
     if (Stage._eachItem === undefined) Stage._eachItem = '';
     if (Stage._eachIndex === undefined) Stage._eachIndex = 0;
     // Extract `var x, y, z;` from generated code (Blockly emits this at top)
@@ -3819,13 +3905,10 @@ document.getElementById('runBtn').onclick = async () => {
   } catch (e) {
     if (e && e.message === '__STOPPED__') log('■ stopped');
     else { log('✗ ' + (e && e.message), 'err'); console.error(e); }
-  }
+  } finally { _setRunBtn(false); }
 };
 
-document.getElementById('stopBtn').onclick = () => {
-  currentRunId++;
-  log('■ stop signal sent');
-};
+
 
 document.getElementById('centerBtn').onclick = () => {
   Stage._center();
@@ -4099,8 +4182,75 @@ let currentProject = null;
       picker.innerHTML = '<option value="">— pick a project —</option>' +
         projects.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
       if (selectName) picker.value = selectName;
+      _renderProjMenu();
     } catch (e) { /* server might be down */ }
   }
+  // Build the pretty project dropdown from the (hidden) <select>
+  function _renderProjMenu() {
+    const menu = document.getElementById('projDropMenu');
+    const btn = document.getElementById('projDropBtn');
+    if (!menu || !btn) return;
+    menu.innerHTML = '';
+    const cur = picker.value;
+    Array.from(picker.options).forEach(opt => {
+      const item = document.createElement('button');
+      item.className = 'fileMenuItem';
+      const isCur = (opt.value === cur && opt.value !== '');
+      item.textContent = (isCur ? '\u2713 ' : '') + opt.textContent;
+      if (isCur) { item.style.fontWeight = 'bold'; item.style.background = '#f0ece0'; }
+      item.addEventListener('click', () => {
+        picker.value = opt.value;
+        menu.style.display = 'none';
+        btn.textContent = opt.value ? opt.textContent : '\u2014 pick a project \u2014';
+        loadProject(opt.value);
+        _renderProjMenu();
+      });
+      menu.appendChild(item);
+    });
+    // update button label to current selection
+    const curOpt = picker.options[picker.selectedIndex];
+    btn.textContent = (cur && curOpt) ? curOpt.textContent : '\u2014 pick a project \u2014';
+    // pms section (pre-made-sprites)
+    try {
+      fetch('/pms').then(r => r.ok ? r.json() : {pms:[]}).then(d => {
+        const list = d.pms || [];
+        window._pmsNames = list.map(x => x.name);
+        if (!list.length) return;
+        const sep = document.createElement('div');
+        sep.style.cssText = 'height:1px;background:var(--line);margin:6px 2px;';
+        menu.appendChild(sep);
+        const hdr = document.createElement('div');
+        hdr.textContent = '\u2728 pre-made-sprites';
+        hdr.style.cssText = 'font-size:11px;color:#888;padding:4px 10px;font-weight:bold;';
+        menu.appendChild(hdr);
+        const curPms = (typeof window._getCurrentPms === 'function') ? window._getCurrentPms() : null;
+        list.forEach(pm => {
+          const it = document.createElement('button');
+          it.className = 'fileMenuItem';
+          const isCur = (curPms === pm.name);
+          it.textContent = (isCur ? '\u2713 ' : '') + pm.name;
+          if (isCur) { it.style.fontWeight = 'bold'; it.style.background = '#f0ece0'; }
+          it.addEventListener('click', () => {
+            menu.style.display = 'none';
+            if (typeof window._openPms === 'function') window._openPms(pm.name);
+          });
+          menu.appendChild(it);
+        });
+      });
+    } catch(e) {}
+  }
+  window._renderProjMenu = _renderProjMenu;
+  // Wire the pretty dropdown open/close
+  (function(){
+    const btn = document.getElementById('projDropBtn');
+    const menu = document.getElementById('projDropMenu');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'flex' : 'none';
+    });
+    document.addEventListener('click', (e) => { if (!menu.contains(e.target) && e.target !== btn) menu.style.display = 'none'; });
+  })();
 
   async function loadProject(name) {
     if (!name) {
@@ -4134,6 +4284,7 @@ let currentProject = null;
         log(`failed to load "${name}"`, 'err'); return;
       }
       currentProject = name;
+      window.__editingPms = null; // leaving pms-edit mode
       lastSerialized = '';
       localStorage.setItem('stage_currentProject', name);
       log(`✓ loaded project "${name}"`, 'ok');
@@ -4219,6 +4370,7 @@ let currentProject = null;
 
   window._saveNow = async function(){ try { await autoSave(); log('💾 saved', 'ok'); } catch(e){ log('save failed: ' + e.message, 'err'); } };
   async function autoSave() {
+    if (window.__editingPms) return; // editing a pms: don't autosave to a project
     if (!serverAlive || !currentProject) return;
     try {
       const state = Blockly.serialization.workspaces.save(workspace);
@@ -4246,7 +4398,7 @@ let currentProject = null;
     const last = localStorage.getItem('stage_currentProject');
     if (last) {
       const exists = Array.from(picker.options).some(o => o.value === last);
-      if (exists) { picker.value = last; await loadProject(last); }
+      if (exists) { picker.value = last; await loadProject(last); if (typeof _renderProjMenu === 'function') _renderProjMenu(); }
     }
   })();
   setInterval(ping, 15000);
@@ -4426,6 +4578,104 @@ let currentProject = null;
   stageEl.addEventListener('pointercancel', end);
   stageEl.addEventListener('pointerleave', end);
 })();
+
+// __pmsClient: pre-made-sprite UI wiring (Stage 1)
+(function(){
+  let _currentPms = null;
+  window._getCurrentPms = () => _currentPms;
+
+  async function refreshPmsList() {
+    try {
+      const r = await fetch('/pms');
+      if (!r.ok) return [];
+      const d = await r.json();
+      window._pmsNames = (d.pms || []).map(x => x.name);
+      return d.pms || [];
+    } catch(e) { return []; }
+  }
+
+  // Add a 'New pre-made-sprite' item to the File menu (next to New project)
+  const fileMenu = document.getElementById('fileMenu');
+  if (fileMenu) {
+    const newPmsBtn = document.createElement('button');
+    newPmsBtn.className = 'fileMenuItem';
+    newPmsBtn.id = 'newPmsBtn';
+    newPmsBtn.textContent = '\u2728 New pre-made-sprite';
+    // place it right after the New project button
+    const newProj = document.getElementById('projectNewBtn');
+    if (newProj && newProj.parentNode) newProj.parentNode.insertBefore(newPmsBtn, newProj.nextSibling);
+    else fileMenu.appendChild(newPmsBtn);
+
+    newPmsBtn.addEventListener('click', async () => {
+      const name = prompt('New pre-made-sprite name:');
+      if (!name || !name.trim()) return;
+      try {
+        const r = await fetch('/pms/new', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim() }) });
+        const d = await r.json();
+        if (!r.ok) { log('new pms: ' + (d.error||'failed'), 'err'); return; }
+        await openPms(d.pms);
+        await refreshPmsList();
+        if (typeof _renderProjMenu === 'function') _renderProjMenu();
+      } catch(e){ log('new pms failed: ' + e.message, 'err'); }
+    });
+  }
+
+  // Open a pms for editing: load its workspace into the canvas.
+  async function openPms(name) {
+    try {
+      const r = await fetch('/pms/' + encodeURIComponent(name));
+      let data = {};
+      if (r.ok) { try { data = await r.json(); } catch(e){} }
+      // load workspace
+      try { workspace.clear(); if (data.workspace && data.workspace.blocks) Blockly.serialization.workspaces.load(data.workspace, workspace); } catch(e){}
+      _currentPms = name;
+      currentProject = null; // not a normal project (real scope var)
+      window.__editingPms = name;
+      try {
+        const pdb = document.getElementById('projDropBtn');
+        if (pdb) pdb.textContent = '\u2728 ' + name;
+        const pp = document.getElementById('projectPicker');
+        if (pp) pp.value = '';
+      } catch(e){}
+      try { setStatus('\u2728 editing pms: ' + name, true); } catch(e){}
+      log('\u2728 editing pre-made-sprite "' + name + '"', 'ok');
+    } catch(e){ log('open pms failed: ' + e.message, 'err'); }
+  }
+  window._openPms = openPms;
+
+  // Save the current pms: capture drawing ops by running the code into a buffer.
+  window._savePmsNow = async function() {
+    const name = _currentPms;
+    if (!name) return false;
+    try {
+      const code = Blockly.JavaScript.workspaceToCode(workspace);
+      // capture ops
+      const AsyncFunction2 = Object.getPrototypeOf(async function(){}).constructor;
+      let ops = [];
+      ops = Stage._captureOps(() => {
+        // run synchronously-ish: we can't await here, but pms drawing is usually sync.
+        try { new Function('Stage', code)(Stage); } catch(e) {}
+      });
+      const ws = Blockly.serialization.workspaces.save(workspace);
+      const payload = { name: name, workspace: ws, ops: ops };
+      const r = await fetch('/pms/' + encodeURIComponent(name) + '/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (r.ok) { log('\u2728 pms "' + name + '" saved (' + ops.length + ' ops)', 'ok'); await refreshPmsList(); return true; }
+      log('pms save failed', 'err'); return false;
+    } catch(e){ log('pms save failed: ' + e.message, 'err'); return false; }
+  };
+
+  // Make 'Save now' save the pms when editing one.
+  const saveNow = document.getElementById('saveNowBtn');
+  if (saveNow) {
+    saveNow.addEventListener('click', () => {
+      if (_currentPms) { window._savePmsNow(); }
+    });
+  }
+
+  // Initial pms name load (so the draw_pms dropdown has names without a run)
+  refreshPmsList();
+})();
+
 </script>
 </body>
 </html>
