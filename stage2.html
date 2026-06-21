@@ -1835,6 +1835,95 @@ Blockly.Blocks['web_field_text'] = {
   }
 };
 
+// ---- element control blocks ----
+const _WEB_ALL = ['web_add_button','web_add_field','web_add_label','web_add_heading','web_add_checkbox','web_add_box','web_add_image_url','web_add_image_pms','web_add_image_file'];
+Blockly.Blocks['web_move'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('move').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.appendValueInput('X').setCheck('Number').appendField('to x');
+    this.appendValueInput('Y').setCheck('Number').appendField('y');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4');
+    this.setTooltip('Move an element to a new x/y.');
+  }
+};
+Blockly.Blocks['web_hide'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('hide').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip('Hide an element.');
+  }
+};
+Blockly.Blocks['web_show'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('show').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip('Show a hidden element.');
+  }
+};
+Blockly.Blocks['web_delete'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('delete').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip('Remove an element.');
+  }
+};
+Blockly.Blocks['web_set_button_text'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button text').appendField(_webIdDropdown(self, ['web_add_button']), 'ID');
+    this.appendValueInput('TEXT').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip("Change a button's text.");
+  }
+};
+Blockly.Blocks['web_set_heading_text'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set heading text').appendField(_webIdDropdown(self, ['web_add_heading']), 'ID');
+    this.appendValueInput('TEXT').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip("Change a heading's text.");
+  }
+};
+Blockly.Blocks['web_set_label_text2'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set label text').appendField(_webIdDropdown(self, ['web_add_label']), 'ID');
+    this.appendValueInput('TEXT').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip("Change a label's text.");
+  }
+};
+Blockly.Blocks['web_set_color'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set color of').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.appendValueInput('COLOR').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip('Set an element\'s color (box background, or text color).');
+  }
+};
+Blockly.Blocks['web_set_size'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set size of').appendField(_webIdDropdown(self, _WEB_ALL), 'ID');
+    this.appendValueInput('SIZE').setCheck('Number').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null); this.setNextStatement(true, null);
+    this.setColour('#00B8D4'); this.setTooltip('Set an element\'s size (text size, box size, or image width).');
+  }
+};
+
 Blockly.defineBlocksWithJsonArray([
   {
     type: 'web_add_heading',
@@ -2184,6 +2273,40 @@ JG.forBlock['web_when_clicked'] = b => {
 JG.forBlock['web_field_text'] = b => {
   const id = b.getFieldValue('ID') || '';
   return [`Stage.fieldText(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_move'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.moveEl(${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_hide'] = b => `Stage.hideEl(${JSON.stringify(b.getFieldValue('ID')||'')});\n`;
+JG.forBlock['web_show'] = b => `Stage.showEl(${JSON.stringify(b.getFieldValue('ID')||'')});\n`;
+JG.forBlock['web_delete'] = b => `Stage.deleteEl(${JSON.stringify(b.getFieldValue('ID')||'')});\n`;
+JG.forBlock['web_set_button_text'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  return `Stage.setButtonText(${JSON.stringify(id)}, ${text});\n`;
+};
+JG.forBlock['web_set_heading_text'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  return `Stage.setHeadingText(${JSON.stringify(id)}, ${text});\n`;
+};
+JG.forBlock['web_set_label_text2'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  return `Stage.setLabel(${JSON.stringify(id)}, ${text});\n`;
+};
+JG.forBlock['web_set_color'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const color = JG.valueToCode(b, 'COLOR', JG.ORDER_NONE) || "'#000000'";
+  return `Stage.setElColor(${JSON.stringify(id)}, ${color});\n`;
+};
+JG.forBlock['web_set_size'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const size = JG.valueToCode(b, 'SIZE', JG.ORDER_NONE) || '16';
+  return `Stage.setElSize(${JSON.stringify(id)}, ${size});\n`;
 };
 JG.forBlock['web_add_heading'] = b => {
   const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
