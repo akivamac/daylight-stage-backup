@@ -4417,24 +4417,72 @@ const Stage = (() => {
     // ---- website elements (real HTML over the stage) ----
     _webEls: {},          // id -> DOM node
     _webClickHandlers: {},// id -> fn
-    _webLayerEl() { return document.getElementById('webLayer'); },
+    _baseLayerEl() { return document.getElementById('webLayer'); },
+    _webContainerStack: [],   // stack of {el} scroll-area inner divs (innermost last)
+    // The element to append into: current scroll-area inner div, or the base layer.
+    _webLayerEl() {
+      const st = this._webContainerStack;
+      return st.length ? st[st.length - 1].el : document.getElementById('webLayer');
+    },
+    _inContainer() { return this._webContainerStack.length > 0; },
     _webClear() {
-      const layer = this._webLayerEl();
+      const layer = document.getElementById('webLayer');
       if (layer) layer.innerHTML = '';
       this._webEls = {};
       this._webClickHandlers = {};
+      this._webContainerStack = [];
+      // reset page height to the screen height
+      if (layer) layer.style.height = '100%';
     },
-    // convert stage coords (centered, Y-up) to layer pixels (top-left, Y-down)
+    // convert PAGE coords (centered, Y-up) to base-layer pixels (top-left, Y-down)
     _webPos(x, y) {
       const px = (W / 2) + (Number(x) || 0);
       const py = (H / 2) - (Number(y) || 0);
       return { px, py };
     },
     _webPlace(node, x, y) {
-      const { px, py } = this._webPos(x, y);
-      node.style.left = px + 'px';
-      node.style.top = py + 'px';
-      node.style.transform = 'translate(-50%, -50%)';
+      if (this._inContainer()) {
+        // Inside a scroll-area: coords are relative to the area's top-left, Y-DOWN.
+        node.style.left = (Number(x) || 0) + 'px';
+        node.style.top = (Number(y) || 0) + 'px';
+        node.style.transform = 'none';
+      } else {
+        const { px, py } = this._webPos(x, y);
+        node.style.left = px + 'px';
+        node.style.top = py + 'px';
+        node.style.transform = 'translate(-50%, -50%)';
+      }
+    },
+    // ---- page height + scroll areas ----
+    setPageHeight(px) {
+      const layer = document.getElementById('webLayer');
+      if (layer) layer.style.height = Math.max(Number(px) || 0, H) + 'px';
+    },
+    _beginScrollArea(id, w, h, innerH, x, y) {
+      const parent = this._webLayerEl();          // place the area into current container/page
+      if (!parent) return;
+      const area = document.createElement('div');
+      area.className = 'web-el web-scrollarea';
+      area.style.width = (Number(w) || 200) + 'px';
+      area.style.height = (Number(h) || 150) + 'px';
+      area.style.overflowY = 'auto';
+      area.style.overflowX = 'hidden';
+      // position the area itself using normal page/container rules
+      this._webPlace(area, x, y);
+      // inner content holder (taller than the area -> scrolls)
+      const inner = document.createElement('div');
+      inner.className = 'web-scrollarea-inner';
+      inner.style.position = 'relative';
+      inner.style.width = '100%';
+      inner.style.height = (Number(innerH) || 400) + 'px';
+      area.appendChild(inner);
+      parent.appendChild(area);
+      this._webEls[String(id)] = area;
+      // push the inner as the active container so child elements append here
+      this._webContainerStack.push({ el: inner });
+    },
+    _endScrollArea() {
+      this._webContainerStack.pop();
     },
     addButton(text, id, x, y) {
       const layer = this._webLayerEl(); if (!layer) return;
