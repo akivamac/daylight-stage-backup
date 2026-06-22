@@ -569,6 +569,9 @@
     <block type="web_btn_round">
       <value name="V"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
     </block>
+    <block type="web_btn_border">
+      <value name="V"><shadow type="colour_picker"><field name="COLOUR">#00B8D4</field></shadow></value>
+    </block>
   </category>
 
   <category name="Costumes" colour="#03A9F4">
@@ -1967,6 +1970,16 @@ Blockly.Blocks['web_btn_round'] = {
     this.setColour('#00B8D4');
   }
 };
+Blockly.Blocks['web_btn_border'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('outline color');
+    this.appendValueInput('V').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
 
 Blockly.Blocks['web_btn_style'] = {
   init: function() {
@@ -2472,6 +2485,10 @@ JG.forBlock['web_btn_height'] = b => {
 JG.forBlock['web_btn_round'] = b => {
   const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
   return `Stage.setBtnRound(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_border'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnBorder(${JSON.stringify(id)}, ${v});\n`;
 };
 JG.forBlock['web_btn_style'] = b => {
   const id=b.getFieldValue('ID')||''; const p=b.getFieldValue('PRESET')||'normal';
@@ -4826,6 +4843,7 @@ const Stage = (() => {
     setBtnWidth(id, n){ const e=this._webEls[String(id)]; if(e) e.style.width=(Number(n)||0)+'px'; },
     setBtnHeight(id, n){ const e=this._webEls[String(id)]; if(e) e.style.height=(Number(n)||0)+'px'; },
     setBtnRound(id, n){ const e=this._webEls[String(id)]; if(e) e.style.borderRadius=(Number(n)||0)+'px'; },
+    setBtnBorder(id, c){ const e=this._webEls[String(id)]; if(e){ e.style.borderStyle='solid'; if(!e.style.borderWidth||e.style.borderWidth==='0px') e.style.borderWidth='2px'; e.style.borderColor=String(c||''); } },
     setButtonStyle(id, preset){
       const e=this._webEls[String(id)]; if(!e) return;
       switch(String(preset)){
