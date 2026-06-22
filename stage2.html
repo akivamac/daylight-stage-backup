@@ -5257,7 +5257,7 @@ let currentProject = null;
       currentProject = name;
       window.__editingPms = null; // leaving pms-edit mode
       // website mode: apply straight from the loaded project data
-      try { _webMode.apply((data && data.website) ? data.website : { on:false, size:'phone' }); } catch(e){}
+      try { if (window._webMode) window._webMode.apply((data && data.website) ? data.website : { on:false, size:'phone' }); } catch(e){}
       lastSerialized = '';
       localStorage.setItem('stage_currentProject', name);
       log(`✓ loaded project "${name}"`, 'ok');
