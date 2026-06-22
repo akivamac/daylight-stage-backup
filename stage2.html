@@ -5586,6 +5586,8 @@ let currentProject = null;
   const stageEl = document.getElementById('stage');
   let dragging = false, startX = 0, startY = 0;
   stageEl.addEventListener('pointerdown', e => {
+    // website mode: let webLayer scroll instead of panning the canvas
+    if (window._webMode && window._webMode.isOn()) return;
     dragging = true;
     startX = e.clientX; startY = e.clientY;
     stageEl.style.cursor = 'grabbing';
