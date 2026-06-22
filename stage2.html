@@ -88,7 +88,10 @@
     top: 12px;
     left: 50%;
     transform: translateX(-50%);
+    overflow: hidden;
   }
+  /* web-page-scroll-fix: webLayer scrolls vertically when the page is taller than the box */
+  #stage.website-mode #webLayer { overflow-y: auto !important; overflow-x: hidden !important; }
   #stageWrap.website-scroll { overflow-y: auto; overflow-x: hidden; }
   /* website-toggle-fix: pin d-pad (and its ⌨/📱 toggles) to bottom-left corner */
   #stage.website-mode #dpad { bottom: 8px; left: 8px; }
