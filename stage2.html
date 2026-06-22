@@ -1887,6 +1887,77 @@ Blockly.Blocks['web_field_text'] = {
   }
 };
 
+Blockly.Blocks['web_btn_bg'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('color');
+    this.appendValueInput('V').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+Blockly.Blocks['web_btn_textcolor'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('text color');
+    this.appendValueInput('V').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+Blockly.Blocks['web_btn_textsize'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('text size');
+    this.appendValueInput('V').setCheck('Number').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+Blockly.Blocks['web_btn_width'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('width');
+    this.appendValueInput('V').setCheck('Number').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+Blockly.Blocks['web_btn_height'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('height');
+    this.appendValueInput('V').setCheck('Number').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+Blockly.Blocks['web_btn_round'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('roundness');
+    this.appendValueInput('V').setCheck('Number').appendField('to');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+
+Blockly.Blocks['web_btn_style'] = {
+  init: function() {
+    const self = this;
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('style to')
+      .appendField(new Blockly.FieldDropdown([['normal','normal'],['big','big'],['small','small'],['pill','pill'],['outline','outline']]), 'PRESET');
+    this.setPreviousStatement(true,null); this.setNextStatement(true,null);
+    this.setColour('#00B8D4');
+  }
+};
+
 // set page height (taller page -> scroll down)
 Blockly.defineBlocksWithJsonArray([
   {
@@ -2357,6 +2428,34 @@ JG.forBlock['web_when_clicked'] = b => {
 JG.forBlock['web_field_text'] = b => {
   const id = b.getFieldValue('ID') || '';
   return [`Stage.fieldText(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_btn_bg'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnBg(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_textcolor'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnTextColor(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_textsize'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnTextSize(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_width'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnWidth(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_height'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnHeight(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_round'] = b => {
+  const id=b.getFieldValue('ID')||''; const v=JG.valueToCode(b,'V',JG.ORDER_NONE)||"''";
+  return `Stage.setBtnRound(${JSON.stringify(id)}, ${v});\n`;
+};
+JG.forBlock['web_btn_style'] = b => {
+  const id=b.getFieldValue('ID')||''; const p=b.getFieldValue('PRESET')||'normal';
+  return `Stage.setButtonStyle(${JSON.stringify(id)}, ${JSON.stringify(p)});\n`;
 };
 JG.forBlock['web_page_height'] = b => {
   const h = JG.valueToCode(b, 'H', JG.ORDER_NONE) || '640';
@@ -4700,6 +4799,22 @@ const Stage = (() => {
     setButtonText(id, text) {
       const el = this._webEls[String(id)];
       if (el) el.textContent = String(text == null ? '' : text);
+    },
+    setBtnBg(id, c){ const e=this._webEls[String(id)]; if(e) e.style.background=String(c||''); },
+    setBtnTextColor(id, c){ const e=this._webEls[String(id)]; if(e) e.style.color=String(c||''); },
+    setBtnTextSize(id, n){ const e=this._webEls[String(id)]; if(e) e.style.fontSize=(Number(n)||14)+'px'; },
+    setBtnWidth(id, n){ const e=this._webEls[String(id)]; if(e) e.style.width=(Number(n)||0)+'px'; },
+    setBtnHeight(id, n){ const e=this._webEls[String(id)]; if(e) e.style.height=(Number(n)||0)+'px'; },
+    setBtnRound(id, n){ const e=this._webEls[String(id)]; if(e) e.style.borderRadius=(Number(n)||0)+'px'; },
+    setButtonStyle(id, preset){
+      const e=this._webEls[String(id)]; if(!e) return;
+      switch(String(preset)){
+        case 'big': e.style.padding='14px 22px'; e.style.fontSize='20px'; e.style.borderRadius='10px'; break;
+        case 'small': e.style.padding='4px 8px'; e.style.fontSize='12px'; e.style.borderRadius='6px'; break;
+        case 'pill': e.style.borderRadius='999px'; e.style.padding='10px 20px'; break;
+        case 'outline': e.style.background='transparent'; e.style.border='2px solid #00B8D4'; e.style.color='#00B8D4'; break;
+        default: e.style.padding='8px 14px'; e.style.fontSize='15px'; e.style.borderRadius='8px'; e.style.border='1px solid #999'; e.style.background='#f3f3f3'; e.style.color='#111';
+      }
     },
     setHeadingText(id, text) {
       const el = this._webEls[String(id)];
