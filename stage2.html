@@ -5250,6 +5250,59 @@ window.addEventListener('resize', () => Blockly.svgResize(workspace));
 
 // ---------- Termux multi-project backup ----------
 let currentProject = null;
+// _autoIncrementIds: when a web element block is created, set its ID field to the
+// next free number for that prefix (btn1, btn2, ...). Each block type that has a
+// default ID prefix is listed here.
+(function(){
+  const PREFIXES = {
+    'web_add_button': 'btn',
+    'web_add_field': 'field',
+    'web_add_label': 'label',
+    'web_add_heading': 'head',
+    'web_add_checkbox': 'check',
+    'web_add_box': 'box',
+    'web_add_image_url': 'img',
+    'web_add_image_pms': 'img',
+    'web_add_image_file': 'img',
+    'web_scroll_area': 'scroll'
+  };
+  function highestForPrefix(ws, prefix, exceptId) {
+    let max = 0;
+    for (const b of ws.getAllBlocks(false)) {
+      if (b.id === exceptId) continue;
+      const pfx = PREFIXES[b.type];
+      if (pfx !== prefix) continue;
+      const v = b.getFieldValue('ID') || '';
+      const m = v.match(new RegExp('^' + prefix + '(\\d+)$'));
+      if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+    }
+    return max;
+  }
+  function attach() {
+    if (typeof workspace === 'undefined' || !workspace) { setTimeout(attach, 200); return; }
+    workspace.addChangeListener((e) => {
+      if (e.type !== Blockly.Events.BLOCK_CREATE) return;
+      const ids = e.ids || (e.blockId ? [e.blockId] : []);
+      for (const id of ids) {
+        const block = workspace.getBlockById(id);
+        if (!block) continue;
+        const prefix = PREFIXES[block.type];
+        if (!prefix) continue;
+        const cur = block.getFieldValue('ID') || '';
+        // Only bump if it still looks like a default (prefix + number) — don't
+        // clobber an ID the user already customized.
+        if (!new RegExp('^' + prefix + '\\d+$').test(cur)) continue;
+        const next = highestForPrefix(workspace, prefix, id) + 1;
+        const want = prefix + next;
+        if (cur !== want) {
+          try { block.setFieldValue(want, 'ID'); } catch(err){}
+        }
+      }
+    });
+  }
+  attach();
+})();
+
 
 (() => {
   const BACKUP_URL = ''; // same-origin (served by stage-server.py)
