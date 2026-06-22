@@ -4520,7 +4520,23 @@ const Stage = (() => {
     // ---- page height + scroll areas ----
     setPageHeight(px) {
       const layer = document.getElementById('webLayer');
-      if (layer) layer.style.height = Math.max(Number(px) || 0, H) + 'px';
+      if (!layer) return;
+      // Keep the layer at the box height (so it's a scroll window); push total
+      // scroll height up with an invisible spacer at the bottom.
+      layer.style.height = '100%';
+      const want = Math.max(Number(px) || 0, H);
+      let spacer = layer.querySelector('.web-page-spacer');
+      if (!spacer) {
+        spacer = document.createElement('div');
+        spacer.className = 'web-page-spacer';
+        spacer.style.position = 'absolute';
+        spacer.style.left = '0';
+        spacer.style.top = '0';
+        spacer.style.width = '1px';
+        spacer.style.pointerEvents = 'none';
+        layer.appendChild(spacer);
+      }
+      spacer.style.height = want + 'px';
     },
     _beginScrollArea(id, w, h, innerH, x, y) {
       const parent = this._webLayerEl();          // place the area into current container/page
@@ -5216,6 +5232,7 @@ _applyLayout();
     }
   };
   window._webMode = _webMode;
+
 
   const ro = new ResizeObserver(entries => {
     if (_webMode.isOn()) return;   // fixed size in website mode
