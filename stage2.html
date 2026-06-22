@@ -101,6 +101,8 @@
   #webLayer .web-el.web-checkwrap { font-size:16px; color:#111; display:inline-flex; align-items:center; cursor:pointer; }
   #webLayer .web-el.web-box { border-radius:4px; }
   #webLayer .web-el.web-img { display:block; }
+  #webLayer .web-el.web-scrollarea { border:1.5px solid #999; border-radius:6px; background:#fafafa; }
+  #webLayer .web-scrollarea-inner .web-el { position:absolute; }
   #layerSPRITES { pointer-events: none; }
 
   /* On-screen D-pad — fires the same key events as a physical keyboard */
@@ -1869,6 +1871,38 @@ Blockly.Blocks['web_field_text'] = {
   }
 };
 
+// set page height (taller page -> scroll down)
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'web_page_height',
+    message0: 'set page height to %1',
+    args0: [{ type: 'input_value', name: 'H', check: 'Number' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#0097A7', inputsInline: true,
+    tooltip: 'Make the page taller than the screen so you can scroll down. Lower elements use bigger negative y.'
+  }
+]);
+
+// scroll area C-block: elements placed inside go INTO the area (relative, top-down coords)
+Blockly.Blocks['web_scroll_area'] = {
+  init: function() {
+    this.appendDummyInput()
+      .appendField('scroll area')
+      .appendField(new Blockly.FieldTextInput('scroll1'), 'ID');
+    this.appendValueInput('W').setCheck('Number').appendField('width');
+    this.appendValueInput('H').setCheck('Number').appendField('height');
+    this.appendValueInput('INNER').setCheck('Number').appendField('inner height');
+    this.appendValueInput('X').setCheck('Number').appendField('at x');
+    this.appendValueInput('Y').setCheck('Number').appendField('y');
+    this.appendStatementInput('DO').appendField('contains');
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour('#0097A7');
+    this.setTooltip('A box that scrolls inside. Put elements in the mouth; they use coordinates from the area\'s top-left, going down.');
+  }
+};
+
 // ---- element control blocks ----
 const _WEB_ALL = ['web_add_button','web_add_field','web_add_label','web_add_heading','web_add_checkbox','web_add_box','web_add_image_url','web_add_image_pms','web_add_image_file'];
 Blockly.Blocks['web_move'] = {
@@ -2307,6 +2341,20 @@ JG.forBlock['web_when_clicked'] = b => {
 JG.forBlock['web_field_text'] = b => {
   const id = b.getFieldValue('ID') || '';
   return [`Stage.fieldText(${JSON.stringify(id)})`, JG.ORDER_FUNCTION_CALL];
+};
+JG.forBlock['web_page_height'] = b => {
+  const h = JG.valueToCode(b, 'H', JG.ORDER_NONE) || '640';
+  return `Stage.setPageHeight(${h});\n`;
+};
+JG.forBlock['web_scroll_area'] = b => {
+  const id = b.getFieldValue('ID') || '';
+  const w = JG.valueToCode(b, 'W', JG.ORDER_NONE) || '200';
+  const h = JG.valueToCode(b, 'H', JG.ORDER_NONE) || '150';
+  const inner = JG.valueToCode(b, 'INNER', JG.ORDER_NONE) || '400';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  const body = JG.statementToCode(b, 'DO');
+  return `Stage._beginScrollArea(${JSON.stringify(id)}, ${w}, ${h}, ${inner}, ${x}, ${y});\n` + body + `Stage._endScrollArea();\n`;
 };
 JG.forBlock['web_move'] = b => {
   const id = b.getFieldValue('ID') || '';
