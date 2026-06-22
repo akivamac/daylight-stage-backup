@@ -5233,11 +5233,13 @@ let currentProject = null;
       return;
     }
     try {
+      let _webCfgFromDisk = { on:false, size:'phone' };
       const r = await fetch(`/project/${encodeURIComponent(name)}/load`);
       if (r.status === 204) {
         workspace.clear();
       } else if (r.ok) {
         const data = await r.json();
+        if (data && data.website) _webCfgFromDisk = data.website;
         if (data && data.tabsData) {
           if (data.workspace) { try { Blockly.serialization.workspaces.load(data.workspace, workspace); } catch(e){} }
           _loadTabs(data.tabsData);
@@ -5256,8 +5258,8 @@ let currentProject = null;
       }
       currentProject = name;
       window.__editingPms = null; // leaving pms-edit mode
-      // website mode: apply straight from the loaded project data
-      try { if (window._webMode) window._webMode.apply((data && data.website) ? data.website : { on:false, size:'phone' }); } catch(e){}
+      // website mode: apply from the loaded project data
+      try { if (window._webMode) window._webMode.apply(_webCfgFromDisk); } catch(e){}
       lastSerialized = '';
       localStorage.setItem('stage_currentProject', name);
       log(`✓ loaded project "${name}"`, 'ok');
