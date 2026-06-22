@@ -99,6 +99,7 @@
   #stage.website-mode #dpad { bottom: 8px; left: 8px; }
 
   #webLayer .web-el { position:absolute; pointer-events:auto; font-family:sans-serif; }
+  #webLayer button.web-el.web-circlebtn { padding:0; display:flex; align-items:center; justify-content:center; }
   #webLayer button.web-el { padding:8px 14px; border-radius:8px; border:1px solid #999; background:#f3f3f3; font-size:15px; cursor:pointer; }
   #webLayer input.web-el { padding:8px 10px; border-radius:8px; border:1.5px solid #999; font-size:15px; }
   #webLayer .web-el.web-label { font-size:16px; color:#111; }
@@ -464,6 +465,12 @@
   <category name="Website" colour="#00B8D4">
     <block type="web_add_button">
       <value name="TEXT"><shadow type="text"><field name="TEXT">Click me</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="web_add_circle_button">
+      <value name="TEXT"><shadow type="text"><field name="TEXT">OK</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
       <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
       <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
     </block>
@@ -1883,13 +1890,28 @@ Blockly.defineBlocksWithJsonArray([
   }
 ]);
 
+Blockly.defineBlocksWithJsonArray([{
+  type: 'web_add_circle_button',
+  message0: 'add circle button %1 size %2 id %3 at x %4 y %5',
+  args0: [
+    { type: 'input_value', name: 'TEXT' },
+    { type: 'input_value', name: 'SIZE', check: 'Number' },
+    { type: 'field_input', name: 'ID', text: 'cbtn1' },
+    { type: 'input_value', name: 'X', check: 'Number' },
+    { type: 'input_value', name: 'Y', check: 'Number' }
+  ],
+  previousStatement: null, nextStatement: null,
+  colour: '#00B8D4', inputsInline: true,
+  tooltip: 'A round (ball) button.'
+}]);
+
 // when button [id] clicked  (hat-ish block with a statement body)
 Blockly.Blocks['web_when_clicked'] = {
   init: function() {
     const self = this;
     this.appendDummyInput()
       .appendField('when button')
-      .appendField(_webIdDropdown(self, ['web_add_button']), 'ID')
+      .appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID')
       .appendField('clicked');
     this.appendStatementInput('DO');
     this.setColour('#00B8D4');
@@ -1913,7 +1935,7 @@ Blockly.Blocks['web_field_text'] = {
 Blockly.Blocks['web_btn_bg'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('color');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('color');
     this.appendValueInput('V').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1923,7 +1945,7 @@ Blockly.Blocks['web_btn_bg'] = {
 Blockly.Blocks['web_btn_textcolor'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('text color');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('text color');
     this.appendValueInput('V').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1933,7 +1955,7 @@ Blockly.Blocks['web_btn_textcolor'] = {
 Blockly.Blocks['web_btn_textsize'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('text size');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('text size');
     this.appendValueInput('V').setCheck('Number').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1943,7 +1965,7 @@ Blockly.Blocks['web_btn_textsize'] = {
 Blockly.Blocks['web_btn_width'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('width');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('width');
     this.appendValueInput('V').setCheck('Number').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1953,7 +1975,7 @@ Blockly.Blocks['web_btn_width'] = {
 Blockly.Blocks['web_btn_height'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('height');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('height');
     this.appendValueInput('V').setCheck('Number').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1963,7 +1985,7 @@ Blockly.Blocks['web_btn_height'] = {
 Blockly.Blocks['web_btn_round'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('roundness');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('roundness');
     this.appendValueInput('V').setCheck('Number').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1973,7 +1995,7 @@ Blockly.Blocks['web_btn_round'] = {
 Blockly.Blocks['web_btn_border'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('outline color');
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('outline color');
     this.appendValueInput('V').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
@@ -1984,7 +2006,7 @@ Blockly.Blocks['web_btn_border'] = {
 Blockly.Blocks['web_btn_style'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button']), 'ID').appendField('style to')
+    this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('style to')
       .appendField(new Blockly.FieldDropdown([['normal','normal'],['big','big'],['small','small'],['pill','pill'],['outline','outline']]), 'PRESET');
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
     this.setColour('#00B8D4');
@@ -2064,7 +2086,7 @@ Blockly.Blocks['web_delete'] = {
 Blockly.Blocks['web_set_button_text'] = {
   init: function() {
     const self = this;
-    this.appendDummyInput().appendField('set button text').appendField(_webIdDropdown(self, ['web_add_button']), 'ID');
+    this.appendDummyInput().appendField('set button text').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID');
     this.appendValueInput('TEXT').appendField('to');
     this.setInputsInline(true);
     this.setPreviousStatement(true, null); this.setNextStatement(true, null);
@@ -2434,6 +2456,14 @@ JG.forBlock['web_add_button'] = b => {
   const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
   const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
   return `Stage.addButton(${text}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
+};
+JG.forBlock['web_add_circle_button'] = b => {
+  const text = JG.valueToCode(b, 'TEXT', JG.ORDER_NONE) || "''";
+  const size = JG.valueToCode(b, 'SIZE', JG.ORDER_NONE) || '60';
+  const id = b.getFieldValue('ID') || '';
+  const x = JG.valueToCode(b, 'X', JG.ORDER_NONE) || '0';
+  const y = JG.valueToCode(b, 'Y', JG.ORDER_NONE) || '0';
+  return `Stage.addCircleButton(${text}, ${size}, ${JSON.stringify(id)}, ${x}, ${y});\n`;
 };
 JG.forBlock['web_add_field'] = b => {
   const id = b.getFieldValue('ID') || '';
@@ -4714,6 +4744,19 @@ const Stage = (() => {
       layer.appendChild(b);
       this._webEls[key] = b;
     },
+    addCircleButton(text, size, id, x, y) {
+      const layer = this._webLayerEl(); if (!layer) return;
+      const b = document.createElement('button');
+      b.className = 'web-el web-circlebtn';
+      b.textContent = String(text == null ? '' : text);
+      const d = Number(size) || 60;
+      b.style.width = d + 'px'; b.style.height = d + 'px'; b.style.borderRadius = '50%';
+      this._webPlace(b, x, y);
+      const key = String(id);
+      b.addEventListener('click', () => { const fn=this._webClickHandlers[key]; if(fn){try{fn();}catch(e){console.error(e);}} });
+      layer.appendChild(b);
+      this._webEls[key] = b;
+    },
     addField(id, x, y) {
       const layer = this._webLayerEl(); if (!layer) return;
       const f = document.createElement('input');
@@ -5409,6 +5452,7 @@ let currentProject = null;
 (function(){
   const PREFIXES = {
     'web_add_button': 'btn',
+    'web_add_circle_button': 'cbtn',
     'web_add_field': 'field',
     'web_add_label': 'label',
     'web_add_heading': 'head',
