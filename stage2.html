@@ -2007,7 +2007,7 @@ Blockly.Blocks['web_btn_style'] = {
   init: function() {
     const self = this;
     this.appendDummyInput().appendField('set button').appendField(_webIdDropdown(self, ['web_add_button','web_add_circle_button']), 'ID').appendField('style to')
-      .appendField(new Blockly.FieldDropdown([['normal','normal'],['big','big'],['small','small'],['pill','pill'],['outline','outline']]), 'PRESET');
+      .appendField(new Blockly.FieldDropdown([['normal','normal'],['big','big'],['small','small'],['pill','pill'],['outline','outline'],['circle','circle']]), 'PRESET');
     this.setPreviousStatement(true,null); this.setNextStatement(true,null);
     this.setColour('#00B8D4');
   }
@@ -4894,6 +4894,7 @@ const Stage = (() => {
         case 'small': e.style.padding='4px 8px'; e.style.fontSize='12px'; e.style.borderRadius='6px'; break;
         case 'pill': e.style.borderRadius='999px'; e.style.padding='10px 20px'; break;
         case 'outline': e.style.background='transparent'; e.style.border='2px solid #00B8D4'; e.style.color='#00B8D4'; break;
+        case 'circle': { const h=Math.max(parseInt(e.style.height)||parseInt(getComputedStyle(e).height)||60,40); e.style.width=h+'px'; e.style.height=h+'px'; e.style.borderRadius='50%'; e.style.padding='0'; e.style.display='flex'; e.style.alignItems='center'; e.style.justifyContent='center'; break; }
         default: e.style.padding='8px 14px'; e.style.fontSize='15px'; e.style.borderRadius='8px'; e.style.border='1px solid #999'; e.style.background='#f3f3f3'; e.style.color='#111';
       }
     },

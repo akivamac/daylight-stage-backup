@@ -1,5 +1,6 @@
 Listing...
 apt
+attr
 bash
 bzip2
 c-ares
@@ -27,6 +28,7 @@ inetutils
 krb5
 ldns
 less
+libacl
 libandroid-glob
 libandroid-posix-semaphore
 libandroid-selinux
@@ -59,6 +61,7 @@ libnettle
 libnghttp2
 libnghttp3
 libnpth
+libopenblas
 libresolv-wrapper
 libsmartcols
 libsqlite
@@ -66,6 +69,7 @@ libssh2
 libtirpc
 libunbound
 libunistring
+libuuid
 libxml2
 lld
 llvm
@@ -88,6 +92,7 @@ procps
 psmisc
 python
 python-ensurepip-wheels
+python-numpy
 python-pip
 readline
 resolv-conf
@@ -104,6 +109,7 @@ termux-tools
 tmux
 unzip
 util-linux
+wget
 xxhash
 xz-utils
 zlib
