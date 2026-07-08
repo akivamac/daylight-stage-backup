@@ -1,5 +1,6 @@
 /data/data/com.termux/files/usr/lib
 ├── @anthropic-ai/claude-code@2.1.201
+├── @github/copilot@1.0.69
 ├── install@0.13.0
 └── npm@11.14.1
 
