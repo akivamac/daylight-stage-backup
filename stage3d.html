@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stage — 3D (with joystick)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blockly/10.4.3/blockly.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --panel: #ffffff;
+    --panel-2: #efece2;
+    --line: #d8d4c8;
+    --text: #1a1a1f;
+    --muted: #6b6b75;
+    --pink: #e91e63;
+    --cyan: #00acc1;
+    --lime: #8bc34a;
+    --amber: #f57c00;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: flex; flex-direction: row-reverse; height: 100dvh; }
+  #blocklyArea { flex: 1.2; min-width: 280px; background: var(--panel); position: relative; display: flex; flex-direction: column; }
+  #blocklyDiv { position: relative; flex: 1 1 auto; min-height: 0; }
+  #rightPanel { flex: 1; min-width: 320px; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); }
+  header.bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 8px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  header.bar .title {
+    font-weight: 800; letter-spacing: 0.5px; font-size: 14px;
+    color: var(--text); margin-right: auto; text-transform: uppercase;
+  }
+  header.bar .title span { color: var(--pink); }
+  button.btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 4px 8px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+    min-height: 40px; min-width: 40px; transition: transform .05s ease, background .15s, border-color .15s;
+  }
+  button.btn:active { transform: translateY(1px); }
+  button.btn.run { background: var(--lime); color: #0a0a0a; border-color: var(--lime); }
+  button.btn.run:hover { filter: brightness(1.05); }
+  button.btn.stop { background: transparent; color: var(--pink); border-color: var(--pink); }
+  button.btn.ghost { background: transparent; }
+  button.btn.ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+  
+  #stageWrap {
+    flex: 1; overflow: hidden; position: relative;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(233,30,99,0.06), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(0,172,193,0.06), transparent 40%),
+      var(--bg);
+  }
+  #stage3dCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  /* Joystick controls */
+  #joystickContainer {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    touch-action: none;
+    z-index: 100;
+  }
+  
+  #joystickThumb {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: rgba(233, 30, 99, 0.8);
+    border-radius: 50%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  /* D-pad on the right */
+  #dpadContainer {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: grid;
+    grid-template-columns: 50px 50px 50px;
+    grid-template-rows: 50px 50px 50px;
+    gap: 6px;
+    z-index: 100;
+    touch-action: none;
+  }
+  
+  .dpad-btn {
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+  }
+  
+  .dpad-btn:active {
+    background: var(--pink);
+  }
+  
+  .dpad-btn[data-key="up"]    { grid-column: 2; grid-row: 1; }
+  .dpad-btn[data-key="left"]  { grid-column: 1; grid-row: 2; }
+  .dpad-btn[data-key="down"]  { grid-column: 2; grid-row: 2; }
+  .dpad-btn[data-key="right"] { grid-column: 3; grid-row: 2; }
+  .dpad-btn[data-key="space"] { grid-column: 1 / span 3; grid-row: 3; font-size: 12px; }
+
+  /* Layout modes */
+  #app { --splitPct: 55%; }
+  #app.mode-split #blocklyArea { flex: 0 0 var(--splitPct); min-width: 0; }
+  #app.mode-split #rightPanel { flex: 1 1 auto; min-width: 0; }
+  #app.mode-split #divider { display: block; }
+  #app.mode-full #blocklyArea { flex: 0 0 0; min-width: 0; display: none; }
+  #app.mode-full #divider { display: none; }
+  #app.mode-full #rightPanel { flex: 1 1 auto; }
+  #app.mode-closed #blocklyArea { flex: 1 1 auto; }
+  #app.mode-closed #divider { display: none; }
+  #app.mode-closed #rightPanel { flex: 0 0 0; min-width: 0; display: none; }
+  
+  #divider {
+    display: none; flex: 0 0 14px; cursor: col-resize; touch-action: none;
+    background: #cfc8b8; border-left: 1px solid #b8b0a0; border-right: 1px solid #b8b0a0;
+  }
+  #divider:hover { background: #b0a890; }
+
+  #log {
+    position: absolute !important; bottom: 0; left: 0; right: 0; z-index: 200; opacity: 0.92;
+    padding: 8px 14px; background: var(--panel-2); color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    min-height: 32px; border-top: 1px solid var(--line);
+    white-space: pre-wrap; max-height: 100px; overflow-y: auto;
+  }
+  #log.ok { color: #2e7d32; }
+  #log.err { color: var(--pink); }
+
+  .blocklyToolboxDiv { background: var(--panel-2) !important; border-right: 1px solid var(--line) !important; }
+  .blocklyTreeRow { padding: 6px 8px !important; min-height: 40px !important; }
+  .blocklyTreeLabel { font-size: 14px !important; }
+</style>
+</head>
+<body>
+<div id="app" class="mode-split">
+  <div id="blocklyArea">
+    <div id="blocklyDiv"></div>
+  </div>
+  <div id="divider"></div>
+  <div id="rightPanel">
+    <header class="bar">
+      <div class="title">stage<span>.</span>3d</div>
+      <button id="runBtn" class="btn run">▶ Run</button>
+      <button id="fullSplitBtn" class="btn ghost" title="Toggle full/split view">💢 full</button>
+    </header>
+    <div id="stageWrap">
+      <canvas id="stage3dCanvas"></canvas>
+      <div id="joystickContainer">
+        <div id="joystickThumb"></div>
+      </div>
+      <div id="dpadContainer">
+        <button class="dpad-btn" data-key="up">↑</button>
+        <button class="dpad-btn" data-key="left">←</button>
+        <button class="dpad-btn" data-key="down">↓</button>
+        <button class="dpad-btn" data-key="right">→</button>
+        <button class="dpad-btn" data-key="space">JUMP</button>
+      </div>
+      <div id="log">ready. 3D mode.</div>
+    </div>
+  </div>
+</div>
+
+<xml id="toolbox" style="display:none">
+  <category name="Events" colour="#FFAB19">
+    <block type="event_run"></block>
+  </category>
+
+  <category name="3D Scene" colour="#9966FF">
+    <block type="scene_clear"></block>
+    <block type="scene_background">
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#87CEEB</field></shadow></value>
+    </block>
+    <block type="scene_fog">
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#87CEEB</field></shadow></value>
+      <value name="NEAR"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="FAR"><shadow type="math_number"><field name="NUM">1000</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="3D Objects" colour="#673AB7">
+    <block type="obj3d_cube">
+      <value name="NAME"><shadow type="text"><field name="TEXT">cube</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="SIZE"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#e91e63</field></shadow></value>
+    </block>
+    <block type="obj3d_sphere">
+      <value name="NAME"><shadow type="text"><field name="TEXT">sphere</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="RADIUS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#00acc1</field></shadow></value>
+    </block>
+    <block type="obj3d_plane">
+      <value name="NAME"><shadow type="text"><field name="TEXT">plane</field></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">-5</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="W"><shadow type="math_number"><field name="NUM">20</field></shadow></value>
+      <value name="H"><shadow type="math_number"><field name="NUM">20</field></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#8bc34a</field></shadow></value>
+    </block>
+    <block type="obj3d_move">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="obj3d_rotate">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+    <block type="obj3d_scale">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+      <value name="SCALE"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+    </block>
+    <block type="obj3d_color">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+      <value name="COLOR"><shadow type="colour_picker"><field name="COLOUR">#4caf50</field></shadow></value>
+    </block>
+    <block type="obj3d_delete">
+      <value name="NAME"><shadow type="sprite_name"></shadow></value>
+    </block>
+    <block type="obj3d_delete_all"></block>
+  </category>
+
+  <category name="Camera" colour="#E91E63">
+    <block type="camera_position">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">5</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">15</field></shadow></value>
+    </block>
+    <block type="camera_look_at">
+      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <value name="Z"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Input" colour="#FF6E40">
+    <block type="key_pressed"></block>
+    <block type="joystick_x"></block>
+    <block type="joystick_y"></block>
+  </category>
+
+  <category name="Control" colour="#FFAB19">
+    <block type="control_wait">
+      <value name="SECS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+    </block>
+    <block type="controls_repeat_ext">
+      <value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
+    </block>
+    <block type="control_forever"></block>
+    <block type="controls_if"></block>
+    <block type="control_stop_all"></block>
+  </category>
+
+  <category name="Variables" colour="#FF8C1A" custom="VARIABLE"></category>
+  <category name="My Blocks" colour="#FF66AA" custom="PROCEDURE"></category>
+
+  <category name="Logic" colour="#5B80A5">
+    <block type="logic_compare"></block>
+    <block type="logic_operation"></block>
+    <block type="logic_negate"></block>
+    <block type="logic_boolean"></block>
+  </category>
+
+  <category name="Math" colour="#40BF4A">
+    <block type="math_number"></block>
+    <block type="math_arithmetic"></block>
+    <block type="math_single"></block>
+    <block type="math_random_int">
+      <value name="FROM"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <value name="TO"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Color" colour="#FF6680">
+    <block type="colour_picker"></block>
+    <block type="my_colour_rgb">
+      <value name="RED"><shadow type="math_number"><field name="NUM">255</field></shadow></value>
+      <value name="GREEN"><shadow type="math_number"><field name="NUM">100</field></shadow></value>
+      <value name="BLUE"><shadow type="math_number"><field name="NUM">50</field></shadow></value>
+    </block>
+  </category>
+
+  <category name="Text" colour="#5BA58C">
+    <block type="text"></block>
+  </category>
+</xml>
+
+<script>
+// ===== THREE.js 3D Scene Setup =====
+let scene, camera, renderer;
+let objects3d = {};
+let mainLoop;
+let isRunning = false;
+
+function initThreeJS() {
+  const container = document.getElementById('stageWrap');
+  const canvas = document.getElementById('stage3dCanvas');
+  
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  
+  // Camera
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 5, 15);
+  camera.lookAt(0, 0, 0);
+  
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+  
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight.position.set(10, 20, 10);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.mapSize.width = 2048;
+  directionalLight.shadow.mapSize.height = 2048;
+  scene.add(directionalLight);
+  
+  // Handle window resize
+  window.addEventListener('resize', onWindowResize, false);
+  
+  // Start render loop
+  renderer.setAnimationLoop(render);
+}
+
+function onWindowResize() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+}
+
+function render() {
+  renderer.render(scene, camera);
+}
+
+// ===== 3D Object Management =====
+function addCube(name, x, y, z, size, colorHex) {
+  const geometry = new THREE.BoxGeometry(size, size, size);
+  const material = new THREE.MeshPhongMaterial({ color: colorHex });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  objects3d[name] = mesh;
+}
+
+function addSphere(name, x, y, z, radius, colorHex) {
+  const geometry = new THREE.SphereGeometry(radius, 32, 32);
+  const material = new THREE.MeshPhongMaterial({ color: colorHex });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  objects3d[name] = mesh;
+}
+
+function addPlane(name, x, y, z, w, h, colorHex) {
+  const geometry = new THREE.PlaneGeometry(w, h);
+  const material = new THREE.MeshPhongMaterial({ color: colorHex, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = Math.PI / 2;
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  scene.add(mesh);
+  objects3d[name] = mesh;
+}
+
+function moveObject(name, x, y, z) {
+  if (objects3d[name]) {
+    objects3d[name].position.x += x;
+    objects3d[name].position.y += y;
+    objects3d[name].position.z += z;
+  }
+}
+
+function rotateObject(name, x, y, z) {
+  if (objects3d[name]) {
+    objects3d[name].rotation.x += x;
+    objects3d[name].rotation.y += y;
+    objects3d[name].rotation.z += z;
+  }
+}
+
+function scaleObject(name, scale) {
+  if (objects3d[name]) {
+    objects3d[name].scale.set(scale, scale, scale);
+  }
+}
+
+function colorObject(name, colorHex) {
+  if (objects3d[name] && objects3d[name].material) {
+    objects3d[name].material.color.setHex(colorHex);
+  }
+}
+
+function deleteObject(name) {
+  if (objects3d[name]) {
+    scene.remove(objects3d[name]);
+    delete objects3d[name];
+  }
+}
+
+function deleteAllObjects() {
+  Object.keys(objects3d).forEach(name => {
+    scene.remove(objects3d[name]);
+  });
+  objects3d = {};
+}
+
+// ===== Joystick Input =====
+let joystickData = { x: 0, y: 0, active: false };
+let keysPressed = {};
+
+function setupJoystick() {
+  const container = document.getElementById('joystickContainer');
+  const thumb = document.getElementById('joystickThumb');
+  const radius = container.offsetWidth / 2;
+  const thumbRadius = thumb.offsetWidth / 2;
+  
+  function updateJoystick(clientX, clientY) {
+    const rect = container.getBoundingClientRect();
+    const centerX = rect.left + radius;
+    const centerY = rect.top + radius;
+    
+    let dx = clientX - centerX;
+    let dy = clientY - centerY;
+    let distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance > radius) {
+      const angle = Math.atan2(dy, dx);
+      dx = Math.cos(angle) * radius;
+      dy = Math.sin(angle) * radius;
+    }
+    
+    thumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    joystickData.x = dx / radius;
+    joystickData.y = -dy / radius;
+  }
+  
+  container.addEventListener('touchstart', (e) => {
+    joystickData.active = true;
+    updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  
+  container.addEventListener('touchmove', (e) => {
+    updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  
+  container.addEventListener('touchend', () => {
+    joystickData.active = false;
+    joystickData.x = 0;
+    joystickData.y = 0;
+    thumb.style.transform = 'translate(-50%, -50%)';
+  });
+  
+  container.addEventListener('mousedown', () => { joystickData.active = true; });
+  container.addEventListener('mousemove', (e) => {
+    if (joystickData.active) updateJoystick(e.clientX, e.clientY);
+  });
+  container.addEventListener('mouseup', () => {
+    joystickData.active = false;
+    joystickData.x = 0;
+    joystickData.y = 0;
+    thumb.style.transform = 'translate(-50%, -50%)';
+  });
+}
+
+// ===== Keyboard & D-pad =====
+function setupInput() {
+  window.addEventListener('keydown', (e) => {
+    keysPressed[e.key.toLowerCase()] = true;
+  });
+  
+  window.addEventListener('keyup', (e) => {
+    keysPressed[e.key.toLowerCase()] = false;
+  });
+  
+  // D-pad buttons
+  document.querySelectorAll('.dpad-btn').forEach(btn => {
+    const key = btn.dataset.key;
+    btn.addEventListener('touchstart', () => { keysPressed[key] = true; });
+    btn.addEventListener('touchend', () => { keysPressed[key] = false; });
+    btn.addEventListener('mousedown', () => { keysPressed[key] = true; });
+    btn.addEventListener('mouseup', () => { keysPressed[key] = false; });
+  });
+}
+
+// ===== Blockly Custom Blocks =====
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'event_run',
+    message0: '▶ when Run pressed',
+    nextStatement: null,
+    colour: '#FFAB19',
+  },
+  {
+    type: 'scene_clear',
+    message0: 'clear 3D scene',
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'scene_background',
+    message0: 'set background color %1',
+    args0: [{ type: 'input_value', name: 'COLOR', check: 'Colour' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF'
+  },
+  {
+    type: 'scene_fog',
+    message0: 'add fog color %1 near %2 far %3',
+    args0: [
+      { type: 'input_value', name: 'COLOR', check: 'Colour' },
+      { type: 'input_value', name: 'NEAR', check: 'Number' },
+      { type: 'input_value', name: 'FAR', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#9966FF', inputsInline: true
+  },
+  {
+    type: 'obj3d_cube',
+    message0: 'create cube %1 at x %2 y %3 z %4 size %5 color %6',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' },
+      { type: 'input_value', name: 'SIZE', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_sphere',
+    message0: 'create sphere %1 at x %2 y %3 z %4 radius %5 color %6',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' },
+      { type: 'input_value', name: 'RADIUS', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_plane',
+    message0: 'create plane %1 at x %2 y %3 z %4 width %5 height %6 color %7',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' },
+      { type: 'input_value', name: 'W', check: 'Number' },
+      { type: 'input_value', name: 'H', check: 'Number' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_move',
+    message0: 'move %1 by x %2 y %3 z %4',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_rotate',
+    message0: 'rotate %1 by x %2 y %3 z %4 (radians)',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_scale',
+    message0: 'scale %1 to %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'SCALE', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_color',
+    message0: 'set color of %1 to %2',
+    args0: [
+      { type: 'input_value', name: 'NAME' },
+      { type: 'input_value', name: 'COLOR', check: 'Colour' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7', inputsInline: true
+  },
+  {
+    type: 'obj3d_delete',
+    message0: 'delete %1',
+    args0: [{ type: 'input_value', name: 'NAME' }],
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'obj3d_delete_all',
+    message0: 'delete all 3D objects',
+    previousStatement: null, nextStatement: null,
+    colour: '#673AB7'
+  },
+  {
+    type: 'camera_position',
+    message0: 'set camera at x %1 y %2 z %3',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#E91E63', inputsInline: true
+  },
+  {
+    type: 'camera_look_at',
+    message0: 'camera look at x %1 y %2 z %3',
+    args0: [
+      { type: 'input_value', name: 'X', check: 'Number' },
+      { type: 'input_value', name: 'Y', check: 'Number' },
+      { type: 'input_value', name: 'Z', check: 'Number' }
+    ],
+    previousStatement: null, nextStatement: null,
+    colour: '#E91E63', inputsInline: true
+  },
+  {
+    type: 'key_pressed',
+    message0: 'key %1 pressed',
+    args0: [{ type: 'field_dropdown', name: 'KEY', options: [['up','arrowup'],['down','arrowdown'],['left','arrowleft'],['right','arrowright'],['space','space'],['w','w'],['a','a'],['s','s'],['d','d']] }],
+    output: 'Boolean',
+    colour: '#FF6E40'
+  },
+  {
+    type: 'joystick_x',
+    message0: 'joystick x',
+    output: 'Number',
+    colour: '#FF6E40'
+  },
+  {
+    type: 'joystick_y',
+    message0: 'joystick y',
+    output: 'Number',
+    colour: '#FF6E40'
+  },
+]);
+
+// ===== Code Generator =====
+Blockly.JavaScript['scene_clear'] = function(block) {
+  return 'deleteAllObjects();\n';
+};
+
+Blockly.JavaScript['scene_background'] = function(block) {
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `scene.background = new THREE.Color(${color});\n`;
+};
+
+Blockly.JavaScript['scene_fog'] = function(block) {
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  const near = Blockly.JavaScript.valueToCode(block, 'NEAR', Blockly.JavaScript.ORDER_ATOMIC);
+  const far = Blockly.JavaScript.valueToCode(block, 'FAR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `scene.fog = new THREE.Fog(${color}, ${near}, ${far});\n`;
+};
+
+Blockly.JavaScript['obj3d_cube'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  const size = Blockly.JavaScript.valueToCode(block, 'SIZE', Blockly.JavaScript.ORDER_ATOMIC);
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `addCube(${name}, ${x}, ${y}, ${z}, ${size}, ${color});\n`;
+};
+
+Blockly.JavaScript['obj3d_sphere'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  const radius = Blockly.JavaScript.valueToCode(block, 'RADIUS', Blockly.JavaScript.ORDER_ATOMIC);
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `addSphere(${name}, ${x}, ${y}, ${z}, ${radius}, ${color});\n`;
+};
+
+Blockly.JavaScript['obj3d_plane'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  const w = Blockly.JavaScript.valueToCode(block, 'W', Blockly.JavaScript.ORDER_ATOMIC);
+  const h = Blockly.JavaScript.valueToCode(block, 'H', Blockly.JavaScript.ORDER_ATOMIC);
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `addPlane(${name}, ${x}, ${y}, ${z}, ${w}, ${h}, ${color});\n`;
+};
+
+Blockly.JavaScript['obj3d_move'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  return `moveObject(${name}, ${x}, ${y}, ${z});\n`;
+};
+
+Blockly.JavaScript['obj3d_rotate'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  return `rotateObject(${name}, ${x}, ${y}, ${z});\n`;
+};
+
+Blockly.JavaScript['obj3d_scale'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const scale = Blockly.JavaScript.valueToCode(block, 'SCALE', Blockly.JavaScript.ORDER_ATOMIC);
+  return `scaleObject(${name}, ${scale});\n`;
+};
+
+Blockly.JavaScript['obj3d_color'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  const color = Blockly.JavaScript.valueToCode(block, 'COLOR', Blockly.JavaScript.ORDER_ATOMIC);
+  return `colorObject(${name}, ${color});\n`;
+};
+
+Blockly.JavaScript['obj3d_delete'] = function(block) {
+  const name = Blockly.JavaScript.valueToCode(block, 'NAME', Blockly.JavaScript.ORDER_ATOMIC);
+  return `deleteObject(${name});\n`;
+};
+
+Blockly.JavaScript['obj3d_delete_all'] = function(block) {
+  return 'deleteAllObjects();\n';
+};
+
+Blockly.JavaScript['camera_position'] = function(block) {
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  return `camera.position.set(${x}, ${y}, ${z});\n`;
+};
+
+Blockly.JavaScript['camera_look_at'] = function(block) {
+  const x = Blockly.JavaScript.valueToCode(block, 'X', Blockly.JavaScript.ORDER_ATOMIC);
+  const y = Blockly.JavaScript.valueToCode(block, 'Y', Blockly.JavaScript.ORDER_ATOMIC);
+  const z = Blockly.JavaScript.valueToCode(block, 'Z', Blockly.JavaScript.ORDER_ATOMIC);
+  return `camera.lookAt(${x}, ${y}, ${z});\n`;
+};
+
+Blockly.JavaScript['key_pressed'] = function(block) {
+  const key = block.getFieldValue('KEY');
+  return [`keysPressed['${key}']`, Blockly.JavaScript.ORDER_ATOMIC];
+};
+
+Blockly.JavaScript['joystick_x'] = function(block) {
+  return [`joystickData.x`, Blockly.JavaScript.ORDER_ATOMIC];
+};
+
+Blockly.JavaScript['joystick_y'] = function(block) {
+  return [`joystickData.y`, Blockly.JavaScript.ORDER_ATOMIC];
+};
+
+Blockly.JavaScript['event_run'] = function(block) {
+  const statements = Blockly.JavaScript.statementToCode(block, 'NEXT');
+  return statements;
+};
+
+// ===== UI Setup =====
+let workspace;
+
+function initBlockly() {
+  const toolbox = document.getElementById('toolbox');
+  workspace = Blockly.inject('blocklyDiv', {
+    toolbox: toolbox,
+    collapse: false,
+    comments: false,
+    disable: false,
+    maxBlocks: Infinity,
+    trashcan: true,
+    horizontalLayout: false,
+    toolboxPosition: 'start',
+    css: true,
+    media: 'https://blockly-demo.appspot.com/static/media/',
+    rtl: false,
+    scrollbars: true,
+    sounds: true,
+    oneBasedIndex: true,
+    grid: { spacing: 25, length: 3, colour: '#ccc', snap: false }
+  });
+}
+
+document.getElementById('runBtn').addEventListener('click', function() {
+  if (isRunning) return;
+  isRunning = true;
+  
+  const code = Blockly.JavaScript.workspaceToCode(workspace);
+  const logDiv = document.getElementById('log');
+  
+  try {
+    // eslint-disable-next-line no-eval, no-new-func
+    new Function(code)();
+    logDiv.textContent = 'Code executed.';
+    logDiv.classList.add('ok');
+  } catch (error) {
+    logDiv.textContent = 'Error: ' + error.message;
+    logDiv.classList.add('err');
+  }
+  
+  isRunning = false;
+});
+
+document.getElementById('fullSplitBtn').addEventListener('click', function() {
+  const app = document.getElementById('app');
+  if (app.classList.contains('mode-split')) {
+    app.classList.remove('mode-split');
+    app.classList.add('mode-full');
+  } else {
+    app.classList.remove('mode-full');
+    app.classList.add('mode-split');
+  }
+});
+
+// Initialize on load
+window.addEventListener('load', () => {
+  initThreeJS();
+  initBlockly();
+  setupJoystick();
+  setupInput();
+});
+</script>
+</body>
+</html>
