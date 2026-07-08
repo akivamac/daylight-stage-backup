@@ -4,3 +4,6 @@ export PATH="$HOME/bin:$PATH"
 (python ~/stage-server.py &) >/dev/null 2>&1
 alias pushstage='~/backup.sh'
 source ~/version-tools.sh
+alias cc='npm install -g @anthropic-ai/claude-code@2.1.62 && TMPDIR=$PREFIX/tmp claude'
+trainjoe() { cd ~/github-projects/joe-brain && python3 training/train.py "$@"; }
+export TMPDIR=$PREFIX/tmp
