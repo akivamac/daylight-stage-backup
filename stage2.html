@@ -5493,26 +5493,56 @@ _applyLayout();
     // apply a config: resize the stage to a fixed size + add the website look,
     // or restore normal infinite-stage behavior.
     apply(cfg) {
-      this.cfg = (cfg && cfg.on) ? { on: true, size: cfg.size || 'phone' } : { on: false, size: 'phone' };
+      cfg = cfg || {};
+      const mode = cfg.mode || 'normal';
+      this.cfg = { on: !!cfg.on, size: cfg.size || 'phone', mode: mode };
       const stageEl = document.getElementById('stage');
       const wrap = document.getElementById('stageWrap');
       const wl = document.getElementById('webLayer');
       const dpad = document.getElementById('dpad');
       const watch = document.getElementById('watchPanel');
-      if (this.cfg.on) {
+      const canvas = document.getElementById('layerSPRITES');
+      const layer3d = document.getElementById('stage3dLayer');
+
+      // Reset all modes first
+      if (stageEl) {
+        stageEl.classList.remove('website-mode', 'mode-3d');
+        stageEl.style.perspective = '';
+        stageEl.style.transformStyle = '';
+      }
+      if (wrap) wrap.classList.remove('website-scroll');
+      if (wl) wl.style.display = 'none';
+      if (dpad) dpad.classList.remove('hidden');
+      if (watch) watch.style.display = '';
+      if (canvas) canvas.style.display = 'block';
+      if (layer3d) layer3d.style.display = 'none';
+
+      if (mode === 'website' || cfg.on) {
         const d = _WEB_SIZES[this.cfg.size] || _WEB_SIZES.phone;
-        Stage._setSize(d[0], d[1]);
+        Stage._setSize(d, d);
         if (stageEl) stageEl.classList.add('website-mode');
         if (wrap) wrap.classList.add('website-scroll');
         if (wl) wl.style.display = 'block';
-        if (dpad) dpad.classList.add('hidden');     // tuck away so they don't cover content
+        if (dpad) dpad.classList.add('hidden');
         if (watch) watch.style.display = 'none';
+      } else if (mode === '3d') {
+        // 3D MODE: Hide canvas, show 3D layer, enable perspective
+        if (stageEl) {
+          stageEl.classList.add('mode-3d');
+          stageEl.style.perspective = '1000px';
+          stageEl.style.transformStyle = 'preserve-3d';
+        }
+        if (canvas) canvas.style.display = 'none';
+        if (layer3d) layer3d.style.display = 'block';
+        // Fit stage to window for 3D
+        if (wrap) Stage._setSize(wrap.clientWidth, wrap.clientHeight);
+        // Initialize 3D sprites if function exists
+        if (typeof Stage.init3DLayer === 'function') Stage.init3DLayer();
       } else {
-        if (stageEl) stageEl.classList.remove('website-mode');
-        if (wrap) wrap.classList.remove('website-scroll');
-        // re-fit to the panel
+        // Normal mode (default)
         if (wrap) Stage._setSize(Math.max(50, wrap.clientWidth|0), Math.max(50, wrap.clientHeight|0));
       }
+    }
     }
   };
   window._webMode = _webMode;
