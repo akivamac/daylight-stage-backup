@@ -82,6 +82,16 @@
                    border-radius: 7px; padding: 5px 9px; font-size: 15px; cursor: pointer; }
   #stage canvas { position: absolute; top: 0; left: 0; display: block; }
   /* website-stage-pos: center the fixed box horizontally, pin top, allow vertical scroll */
+  
+  /* 3D Mode Styles */
+  #stage.mode-3d { perspective: 1000px; transform-style: preserve-3d; overflow: hidden; }
+  #stage3dLayer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-style: preserve-3d; pointer-events: none; display: none; }
+  .sprite-3d { position: absolute; transform-style: preserve-3d; pointer-events: auto; will-change: transform; display: flex; align-items: center; justify-content: center; }
+  .sprite-3d img, .sprite-3d canvas { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  #joystickZone { position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); touch-action: none; z-index: 9999; display: none; }
+  #joystickKnob { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; background: rgba(255,255,255,0.6); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+  #joystickZone.active { background: rgba(255,255,255,0.2); }
+
   #stage.website-mode {
     box-shadow: 0 0 0 2px #888, 0 8px 30px rgba(0,0,0,0.2);
     inset: auto;            /* cancel the inset:0 pinning */
@@ -269,7 +279,8 @@
         <canvas id="layerBG"></canvas>
         <canvas id="layerMID"></canvas>
         <canvas id="layerFG"></canvas>
-        <canvas id="layerSPRITES"></canvas>
+        <canvas id="layerSPRITES" style="display:block" />
+        <div id="stage3dLayer" style="display:none"></div>></canvas>
         <div id="penCursor" data-state="up">p</div>
         <div id="webLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;display:none;"></div>
         <div id="tapeMeasure" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:8px 14px;border-radius:10px;font-family:ui-monospace,monospace;font-size:14px;font-weight:600;z-index:120;pointer-events:none;display:none;">tape</div>
@@ -3244,6 +3255,82 @@ const workspace = Blockly.inject('blocklyDiv', {
       picker.addEventListener('pointermove', handler, true);
     } catch(e) {}
   };
+
+  // --- 3D Mode & Joystick Logic ---
+  Stage.init3DLayer = function() {
+    const layer = document.getElementById('stage3dLayer');
+    if (!layer) return;
+    layer.innerHTML = '';
+    sprites.forEach((s, name) => Stage.create3DSprite(name, s));
+    Stage.setupJoystick();
+  };
+
+  Stage.create3DSprite = function(name, spriteObj) {
+    const layer = document.getElementById('stage3dLayer');
+    if (!layer || spriteObj.domEl) return;
+    const el = document.createElement('div');
+    el.className = 'sprite-3d';
+    el.id = 'sprite-' + name;
+    if (spriteObj.costume) {
+      const img = document.createElement('img');
+      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><circle cx="25" cy="25" r="20" fill="' + (spriteObj.color || '#000') + '"/></svg>';
+      el.appendChild(img);
+    } else {
+      el.style.backgroundColor = spriteObj.color || '#000';
+      el.style.borderRadius = '50%';
+    }
+    layer.appendChild(el);
+    spriteObj.domEl = el;
+    Stage.update3DSprite(name, spriteObj);
+  };
+
+  Stage.update3DSprite = function(name, spriteObj) {
+    if (!spriteObj.domEl) return;
+    const el = spriteObj.domEl;
+    const x = spriteObj.x;
+    const y = -spriteObj.y;
+    const z = spriteObj.z || 0;
+    const rot = spriteObj.rotation || 0;
+    const size = spriteObj.size || 20;
+    el.style.width = (size * 2) + 'px';
+    el.style.height = (size * 2) + 'px';
+    el.style.transform = 'translate3d(' + x + 'px, ' + y + 'px, ' + z + 'px) rotateZ(' + (-rot) + 'deg)';
+    el.style.zIndex = Math.floor(1000 + z);
+  };
+
+  Stage.setupJoystick = function() {
+    if (document.getElementById('joystickZone')) return;
+    const zone = document.createElement('div');
+    zone.id = 'joystickZone';
+    const knob = document.createElement('div');
+    knob.id = 'joystickKnob';
+    zone.appendChild(knob);
+    document.body.appendChild(zone);
+    let active = false, dx = 0, dy = 0;
+    const update = (cx, cy) => {
+      const rect = zone.getBoundingClientRect();
+      const cx0 = rect.left + rect.width/2, cy0 = rect.top + rect.height/2;
+      let nx = cx - cx0, ny = cy - cy0;
+      const dist = Math.hypot(nx, ny), max = rect.width/2 - 25;
+      if (dist > max) { const a = Math.atan2(ny, nx); nx = Math.cos(a)*max; ny = Math.sin(a)*max; }
+      knob.style.transform = 'translate(calc(-50% + ' + nx + 'px), calc(-50% + ' + ny + 'px))';
+      dx = nx/max; dy = ny/max;
+      const player = sprites.values().next().value;
+      if (player) {
+        player.x += dx * 5; player.y += dy * 5;
+        if (Math.abs(dx)>0.1 || Math.abs(dy)>0.1) player.rotation = Math.atan2(dy, dx) * 180 / Math.PI;
+        Stage.update3DSprite('player', player);
+      }
+    };
+    zone.addEventListener('touchstart', e => { active=true; zone.classList.add('active'); update(e.touches.clientX, e.touches.clientY); }, {passive:false});
+    zone.addEventListener('touchmove', e => { if(!active)return; e.preventDefault(); update(e.touches.clientX, e.touches.clientY); }, {passive:false});
+    const end = () => { active=false; zone.classList.remove('active'); knob.style.transform='translate(-50%, -50%)'; dx=0; dy=0; };
+    zone.addEventListener('touchend', end); zone.addEventListener('touchcancel', end);
+    zone.addEventListener('mousedown', e => { active=true; zone.classList.add('active'); update(e.clientX, e.clientY); });
+    document.addEventListener('mousemove', e => { if(!active)return; update(e.clientX, e.clientY); });
+    document.addEventListener('mouseup', end);
+  };
+
 })();
 
 
@@ -5256,7 +5343,7 @@ document.addEventListener('keydown', e => {
 document.getElementById('saveBtn').onclick = () => {
   try {
     const state = Blockly.serialization.workspaces.save(workspace);
-    const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists(), website: _webMode.cfg };
+    const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists(), website: _webMode.cfg, mode: _webMode.cfg.mode || 'normal' };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -5656,7 +5743,10 @@ let currentProject = null;
     if (!name) return;
     // WEB_ASK: is this a website project? what size?
     let webCfg = { on: false, size: 'phone' };
-    if (confirm('Make this a WEBSITE project?\n\nOK = website (page with buttons/fields)\nCancel = normal drawing project')) {
+    const modeInput = prompt('Select Project Mode:\n\n[OK] = Normal (Infinite 2D)\n[Cancel] = Website (Fixed 2D)\n[Type "3d"] = True 3D (Walkaround with Joystick)');
+    if (modeInput && modeInput.toLowerCase() === '3d') {
+      webCfg = { on: false, mode: '3d' };
+    } else if (confirm('Make this a WEBSITE project?\n\nOK = website (page with buttons/fields)\nCancel = normal drawing project')) {
       let sz = (prompt('Size? type: phone, tablet, or page', 'phone') || 'phone').trim().toLowerCase();
       if (['phone','tablet','page'].indexOf(sz) < 0) sz = 'phone';
       webCfg = { on: true, size: sz };
@@ -5740,7 +5830,7 @@ let currentProject = null;
     if (!serverAlive || !currentProject) return;
     try {
       const state = Blockly.serialization.workspaces.save(workspace);
-      const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists(), website: _webMode.cfg };
+      const payload = { _kind: 'stage-project', _version: 2, savedAt: new Date().toISOString(), workspace: state, tabsData: _dumpTabs(), layout: _dumpLayout(), lists: Stage._dumpLists(), website: _webMode.cfg, mode: _webMode.cfg.mode || 'normal' };
       const json = JSON.stringify(payload);
       if (json === lastSerialized) return;
       const r = await fetch(`/project/${encodeURIComponent(currentProject)}/save`, {

@@ -73,6 +73,7 @@ libunbound
 libunistring
 libuuid
 libxml2
+libxslt
 lld
 llvm
 lsof
